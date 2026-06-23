@@ -1,5 +1,5 @@
 [server]
-state_path = "config/deepseek-v3-dense-160m-ultra-fineweb/state.toml"
+state_path = "config/deepseek-v3-dense-250m-ufw/state.toml"
 server_port = 39405
 live_web_port = 8081
 tui = false
@@ -23,8 +23,8 @@ trust_remote_code = false
 [model]
 enabled = true
 script = "scripts/push-new-model-hf.py"
-config = "config/deepseek-v3-dense-160m-ultra-fineweb/model-config.json"
-repo = "aethercompute/deepseek-v3-dense-160m-init"
+config = "config/deepseek-v3-dense-250m-ufw/model-config.json"
+repo = "aethercompute/deepseek-v3-dense-250m-init"
 tokenizer = "deepseek-ai/DeepSeek-V3"
 private = false
 dtype = "bfloat16"

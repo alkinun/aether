@@ -2,7 +2,7 @@
 
 FROM python:3.12-slim-bookworm AS builder
 
-ARG RUST_VERSION=1.88.0
+ARG RUST_VERSION=1.89.0
 ARG TORCH_VERSION=2.7.0
 ARG TORCH_INDEX_URL=https://download.pytorch.org/whl/cpu
 ARG PYTHON_TRAINING_DEPS="datasets huggingface-hub tqdm transformers"

@@ -4,9 +4,9 @@ run_state = "WaitingForMembers"
 [config]
 warmup_time = 30
 cooldown_time = 10
-epoch_time = 300
-max_round_train_time = 120
-round_witness_time = 2
+epoch_time = 120
+max_round_train_time = 30
+round_witness_time = 10
 min_clients = 2
 init_min_clients = 2
 global_batch_size_start = 8

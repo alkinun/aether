@@ -864,6 +864,10 @@ impl StepStateMachine {
                     &mut self.current_round,
                 ))
             }
+            (ActiveStep::Cooldown(cooldown), RunState::Finished) => {
+                let (_trainers, _upload_handle) = cooldown.finish().await?;
+                ActiveStep::Intermediate
+            }
             // stay in existing run state if there's no reason to change.
             (current_step, next_run_state) if current_step.allowed_in_run_state(next_run_state) => {
                 current_step
@@ -912,14 +916,12 @@ enum ActiveStep {
 impl ActiveStep {
     pub fn allowed_in_run_state(&self, run_state: RunState) -> bool {
         match (self, run_state) {
-            (ActiveStep::Intermediate, _) => {
-                unreachable!("the intermediate run state can never be seen, it's ephemeral")
-            }
+            (ActiveStep::Intermediate, _) => true,
             (
                 ActiveStep::Warmup(..),
                 RunState::Warmup | RunState::WaitingForMembers | RunState::Paused,
             ) => true,
-            (ActiveStep::Cooldown(..), RunState::Cooldown) => true,
+            (ActiveStep::Cooldown(..), RunState::Cooldown | RunState::Finished) => true,
             (ActiveStep::Training(..), RunState::RoundTrain) => true,
             (ActiveStep::Witness(..), RunState::RoundWitness) => true,
             _ => false,

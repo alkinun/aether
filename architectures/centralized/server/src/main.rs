@@ -1,5 +1,6 @@
 mod app;
 mod dashboard;
+mod web;
 
 use anyhow::{Context, Result, bail};
 use app::{App, DataServerInfo};
@@ -95,6 +96,10 @@ struct RunArgs {
         require_equals = false
     )]
     withdraw_on_disconnect: bool,
+
+    /// Port for the HTMX web dashboard.
+    #[clap(long, default_value_t = 8080)]
+    web_port: u16,
 
     /// An auth header string for an opentelemetry endpoint. Used for both logging and metrics.
     #[clap(long, env)]
@@ -223,6 +228,7 @@ async fn main() -> Result<()> {
                         run_args.events_dir,
                         run_args.init_warmup_time,
                         run_args.withdraw_on_disconnect,
+                        Some(run_args.web_port),
                     )
                     .await?
                     .run()

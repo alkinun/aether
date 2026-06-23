@@ -34,6 +34,7 @@ use tokio_util::sync::CancellationToken;
 use tracing::{Instrument, debug, info, info_span, warn};
 
 use crate::dashboard::{DashboardState, DashboardTui};
+use crate::web::{self, LossPoint, WebState};
 
 pub(super) type TabWidgetTypes = (
     DashboardTui,
@@ -103,6 +104,8 @@ pub struct App {
     original_warmup_time: u64,
     withdraw_on_disconnect: bool,
     pause: Option<Arc<Notify>>,
+    loss_history: Vec<LossPoint>,
+    web_state: Option<std::sync::Arc<std::sync::Mutex<WebState>>>,
 }
 
 /// Methods intended for testing purposes only.
@@ -169,6 +172,7 @@ impl App {
         events_dir: Option<PathBuf>,
         init_warmup_time: Option<u64>,
         withdraw_on_disconnect: bool,
+        web_port: Option<u16>,
     ) -> Result<Self> {
         async {
             Self::reset_ephemeral(&mut coordinator);
@@ -272,6 +276,18 @@ impl App {
 
             let original_warmup_time = coordinator.config.warmup_time;
 
+            let web_port = web_port.unwrap_or(8080);
+            let web_state = web::start(
+                WebState {
+                    coordinator: Some(coordinator),
+                    loss_history: Vec::new(),
+                    pending_clients: Vec::new(),
+                    server_addr: String::new(),
+                },
+                web_port,
+                cancel.clone(),
+            );
+
             if let Some(init_warmup_time) = init_warmup_time {
                 coordinator.config.warmup_time = init_warmup_time;
             }
@@ -342,6 +358,8 @@ impl App {
                 original_warmup_time,
                 withdraw_on_disconnect,
                 pause,
+                loss_history: Vec::new(),
+                web_state: Some(web_state),
             })
         }.instrument(info_span!("App::new")).await
     }
@@ -402,7 +420,24 @@ impl App {
             );
             tx_tui_state.send(states).await?;
         }
+        self.update_web_state();
         Ok(())
+    }
+
+    fn update_web_state(&mut self) {
+        if let Some(ref shared) = self.web_state {
+            if let Ok(mut state) = shared.lock() {
+                state.coordinator = Some(self.coordinator);
+                state.loss_history.clone_from(&self.loss_history);
+                state.pending_clients = self
+                    .backend
+                    .pending_clients
+                    .iter()
+                    .map(|c| c.to_string())
+                    .collect();
+                state.server_addr = self.backend.net_server.local_addr().to_string();
+            }
+        }
     }
 
     fn on_disconnect(&mut self, from: PublicKey) -> Result<()> {
@@ -445,9 +480,20 @@ impl App {
             ClientToServerMessage::Witness(witness) => {
                 let state_before = self.coordinator.run_state;
                 if let Err(error) = match *witness {
-                    OpportunisticData::WitnessStep(witness, _witness_metadata) => self
-                        .coordinator
-                        .witness(&from_identity, witness, Self::get_timestamp()),
+                    OpportunisticData::WitnessStep(witness, witness_metadata) => {
+                        if witness_metadata.loss.is_finite() {
+                            self.loss_history.push(LossPoint {
+                                step: witness_metadata.step,
+                                loss: witness_metadata.loss,
+                                tokens_per_sec: witness_metadata.tokens_per_sec,
+                            });
+                        }
+                        if self.loss_history.len() > 500 {
+                            self.loss_history.drain(0..self.loss_history.len() - 500);
+                        }
+                        self.coordinator
+                            .witness(&from_identity, witness, Self::get_timestamp())
+                    }
                     OpportunisticData::WarmupStep(witness) => self.coordinator.warmup_witness(
                         &from_identity,
                         witness,

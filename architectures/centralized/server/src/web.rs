@@ -70,14 +70,14 @@ async fn overview_partial(State(state): State<SharedState>) -> Html<String> {
             let epoch = coord.progress.epoch;
             let height = coord.epoch_state.rounds[coord.epoch_state.rounds_head as usize].height;
             Html(format!(
-                r#"<div class="stat-grid">
-<div class="stat"><span class="stat-label">Run State</span><span class="stat-value run-state">{run_state}</span></div>
-<div class="stat"><span class="stat-label">Step</span><span class="stat-value">{step} / {total_steps}</span></div>
-<div class="stat"><span class="stat-label">Epoch</span><span class="stat-value">{epoch}</span></div>
-<div class="stat"><span class="stat-label">Height (Round)</span><span class="stat-value">{height}</span></div>
-<div class="stat"><span class="stat-label">Clients</span><span class="stat-value">{clients_count} ({exited} exited)</span></div>
-<div class="stat"><span class="stat-label">Server</span><span class="stat-value" style="font-size:14px">{server_addr}</span></div>
-</div>"#,
+                r#"<table border="1">
+<tr><td><b>Run State</b></td><td>{run_state}</td></tr>
+<tr><td><b>Step</b></td><td>{step} / {total_steps}</td></tr>
+<tr><td><b>Epoch</b></td><td>{epoch}</td></tr>
+<tr><td><b>Height (Round)</b></td><td>{height}</td></tr>
+<tr><td><b>Clients</b></td><td>{clients_count} ({exited} exited)</td></tr>
+<tr><td><b>Server</b></td><td>{server_addr}</td></tr>
+</table>"#,
                 run_state = run_state,
                 step = step,
                 total_steps = total_steps,
@@ -89,7 +89,7 @@ async fn overview_partial(State(state): State<SharedState>) -> Html<String> {
             ))
         }
         None => Html(
-            r#"<div class="stat-grid"><div class="stat"><span class="stat-value">Waiting for coordinator data...</span></div></div>"#.into(),
+            r#"<i>Waiting for coordinator data...</i>"#.into(),
         ),
     }
 }
@@ -105,15 +105,15 @@ async fn clients_partial(State(state): State<SharedState>) -> Html<String> {
                 let state_str = format!("{}", client.state);
                 let exited = client.exited_height;
                 rows.push_str(&format!(
-                    r#"<tr><td>{}</td><td><span class="badge badge-{}">{}</span></td><td>{}</td></tr>"#,
-                    id, state_str, state_str, exited,
+                    r#"<tr><td>{}</td><td><b>{}</b></td><td>{}</td></tr>"#,
+                    id, state_str, exited,
                 ));
             }
             if rows.is_empty() {
-                rows = r#"<tr><td colspan="3" style="color:#8b949e;text-align:center;padding:20px;">No clients connected</td></tr>"#.into();
+                rows = r#"<tr><td colspan="3"><i>No clients connected</i></td></tr>"#.into();
             }
             Html(format!(
-                r#"<table class="clients-table">
+                r#"<table border="1">
 <thead><tr><th>Client ID</th><th>Status</th><th>Exited Height</th></tr></thead>
 <tbody>{rows}</tbody>
 </table>"#,
@@ -121,7 +121,7 @@ async fn clients_partial(State(state): State<SharedState>) -> Html<String> {
             ))
         }
         None => Html(
-            r#"<div style="color:#8b949e;text-align:center;padding:20px;">Waiting for coordinator data...</div>"#.into(),
+            r#"<i>Waiting for coordinator data...</i>"#.into(),
         ),
     }
 }
@@ -143,7 +143,7 @@ fn render_loss_svg(losses: &[LossPoint]) -> String {
     let filtered: Vec<&LossPoint> = losses.iter().filter(|l| l.loss.is_finite()).collect();
     let n = filtered.len();
     if n < 2 {
-        return r#"<div style="color:#8b949e;text-align:center;padding:40px;">Not enough loss data yet</div>"#.into();
+        return r#"<i>Not enough loss data yet</i>"#.into();
     }
 
     let steps: Vec<u32> = filtered.iter().map(|l| l.step).collect();
@@ -171,7 +171,7 @@ fn render_loss_svg(losses: &[LossPoint]) -> String {
         let val = min_loss as f64 + (max_loss - min_loss) as f64 * (i as f64 / y_ticks as f64);
         let y = plot_y1 - (i as f64 / y_ticks as f64) * plot_h;
         y_labels.push_str(&format!(
-            r##"<text x="{}" y="{}" text-anchor="end" fill="#8b949e" font-size="11">{:.2}</text>"##,
+            r##"<text x="{}" y="{}" text-anchor="end">{:.2}</text>"##,
             pad_left - 5.0,
             y + 4.0,
             val,
@@ -184,7 +184,7 @@ fn render_loss_svg(losses: &[LossPoint]) -> String {
         let val = min_step + (max_step - min_step) * (i as f64 / x_ticks as f64);
         let x = plot_x0 + (i as f64 / x_ticks as f64) * plot_w;
         x_labels.push_str(&format!(
-            r##"<text x="{x}" y="{}" text-anchor="middle" fill="#8b949e" font-size="11">{:.0}</text>"##,
+            r##"<text x="{x}" y="{}" text-anchor="middle">{:.0}</text>"##,
             height - 8.0,
             val,
         ));
@@ -194,16 +194,13 @@ fn render_loss_svg(losses: &[LossPoint]) -> String {
 
     format!(
         r##"<div>
-<div style="margin-bottom:8px;">
-<span style="color: #8b949e; font-size:12px;">Latest Loss:</span>
-<span style="color: #c9d1d9; font-size:20px; font-weight:bold;">{last_loss:.4}</span>
-<span style="color: #8b949e; font-size:12px; margin-left:12px;">Steps: {min_step} - {max_step}</span>
-</div>
+<b>Latest Loss:</b> {last_loss:.4} &nbsp;&nbsp; Steps: {min_step:.0} - {max_step:.0}
+<br><br>
 <svg width="{width}" height="{height}" viewBox="0 0 {width} {height}" xmlns="http://www.w3.org/2000/svg">
-<rect x="{plot_x0}" y="{plot_y0}" width="{plot_w}" height="{plot_h}" fill="none" stroke="#30363d" stroke-width="1"/>
+<rect x="{plot_x0}" y="{plot_y0}" width="{plot_w}" height="{plot_h}" fill="none" stroke="black"/>
 {y_labels}
 {x_labels}
-<polyline points="{points_str}" fill="none" stroke="#58a6ff" stroke-width="2"/>
+<polyline points="{points_str}" fill="none" stroke="black"/>
 </svg>
 </div>"##,
         last_loss = last_loss,
@@ -251,41 +248,34 @@ fn format_run_state(state: RunState) -> &'static str {
     }
 }
 
-const INDEX_HTML: &str = r#"<!DOCTYPE html>
-<html lang="en">
+const INDEX_HTML: &str = r##"<!DOCTYPE html>
+<html>
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Psyche Monitor</title>
 <script src="https://unpkg.com/htmx.org@2.0.4"></script>
-<style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Courier New',monospace;background:#0d1117;color:#c9d1d9;padding:24px}
-h1{color:#58a6ff;font-size:24px;margin-bottom:20px}
-.dashboard{display:flex;flex-direction:column;gap:16px;max-width:1000px}
-.panel{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:16px}
-.panel h2{color:#8b949e;font-size:13px;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px}
-.stat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px}
-.stat{display:flex;flex-direction:column}
-.stat-label{color:#8b949e;font-size:11px;margin-bottom:2px}
-.stat-value{color:#c9d1d9;font-size:22px;font-weight:bold}
-.run-state{color:#58a6ff}
-.clients-table{width:100%;border-collapse:collapse;font-size:13px}
-.clients-table th{text-align:left;color:#8b949e;font-size:11px;padding:6px 8px;border-bottom:1px solid #30363d}
-.clients-table td{padding:6px 8px;border-bottom:1px solid #21262d}
-.badge{display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:bold}
-.badge-Healthy{background:#1b4721;color:#3fb950}
-.badge-Dropped{background:#47211b;color:#f85149}
-.badge-Withdrawn{background:#47361b;color:#d29922}
-.badge-Ejected{background:#47211b;color:#f85149}
-</style>
 </head>
 <body>
+
 <h1>Psyche Monitor</h1>
-<div class="dashboard">
-<div class="panel" id="overview-panel"><h2>Overview</h2><div hx-get="/partials/overview" hx-trigger="every 2s" hx-swap="innerHTML">Loading...</div></div>
-<div class="panel" id="clients-panel"><h2>Clients</h2><div hx-get="/partials/clients" hx-trigger="every 2s" hx-swap="innerHTML">Loading...</div></div>
-<div class="panel" id="loss-panel"><h2>Loss</h2><div hx-get="/partials/loss" hx-trigger="every 5s" hx-swap="innerHTML">Loading...</div></div>
-</div>
+<hr>
+
+<table>
+<tr valign="top">
+<td>
+<h2>Overview</h2>
+<div hx-get="/partials/overview" hx-trigger="every 2s" hx-swap="innerHTML"><i>Loading...</i></div>
+</td>
+<td>
+<h2>Clients</h2>
+<div hx-get="/partials/clients" hx-trigger="every 2s" hx-swap="innerHTML"><i>Loading...</i></div>
+</td>
+</tr>
+</table>
+
+<hr>
+
+<h2>Loss</h2>
+<div hx-get="/partials/loss" hx-trigger="every 5s" hx-swap="innerHTML"><i>Loading...</i></div>
+
 </body>
-</html>"#;
+</html>"##;

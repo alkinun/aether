@@ -347,32 +347,6 @@ fn format_optimizer(opt: &OptimizerDefinition) -> String {
                 betas[0], betas[1], weight_decay, eps, clip
             )
         }
-        OptimizerDefinition::Muon {
-            momentum,
-            weight_decay,
-            ns_steps,
-            nesterov,
-            adamw_betas,
-            adamw_eps,
-            adamw_weight_decay,
-            clip_grad_norm,
-        } => {
-            let clip = clip_grad_norm
-                .map(|v| v.to_string())
-                .unwrap_or_else(|| "None".into());
-            format!(
-                "Muon(momentum={}, weight_decay={}, ns_steps={}, nesterov={}, adamw_betas=[{},{}], adamw_eps={}, adamw_weight_decay={}, clip_grad_norm={})",
-                momentum,
-                weight_decay,
-                ns_steps,
-                nesterov,
-                adamw_betas[0],
-                adamw_betas[1],
-                adamw_eps,
-                adamw_weight_decay,
-                clip
-            )
-        }
         OptimizerDefinition::Distro {
             clip_grad_norm,
             weight_decay,

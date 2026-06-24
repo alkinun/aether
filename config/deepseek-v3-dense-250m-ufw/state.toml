@@ -1,21 +1,24 @@
-run_id = "ds-v3-dense-250m-ufw"
+run_id = "deepseek-v3-dense-250m-1b"
 run_state = "WaitingForMembers"
 
 [config]
-warmup_time = 60
-cooldown_time = 30
-epoch_time = 600
-max_round_train_time = 180
-round_witness_time = 60
-min_clients = 2
-init_min_clients = 2
-global_batch_size_start = 8
-global_batch_size_end = 8
+warmup_time = 15
+cooldown_time = 5
+epoch_time = 120
+max_round_train_time = 60
+round_witness_time = 5
+min_clients = 4
+init_min_clients = 4
+
+# 61,035 * 32 * 512 = 999,997,440 tokens
+global_batch_size_start = 32
+global_batch_size_end = 32
 global_batch_size_warmup_tokens = 0
+
 verification_percent = 0
 witness_nodes = 1
-total_steps = 78000
-waiting_for_members_extra_time = 30
+total_steps = 61035
+waiting_for_members_extra_time = 10
 
 [model.LLM]
 architecture = "HfDeepseek"
@@ -29,13 +32,13 @@ token_size_in_bytes = "FourBytes"
 shuffle = "DontShuffle"
 
 [model.LLM.checkpoint.Hub]
-repo_id = "aethercompute/deepseek-v3-dense-250m-init"
+repo_id = "aethercompute/deepseek-v3-dense-250m-1b"
 
 [model.LLM.lr_schedule.Cosine]
 base_lr = 3.0e-4
-warmup_steps = 2000
+warmup_steps = 1500
 warmup_init_lr = 0.0
-total_steps = 78000
+total_steps = 61035
 final_lr = 3.0e-5
 
 [model.LLM.optimizer.Distro]

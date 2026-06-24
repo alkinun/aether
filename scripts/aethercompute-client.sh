@@ -8,6 +8,7 @@ DEFAULT_SERVER_PORT="39405"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 STATE_DIR="$REPO_ROOT/.aethercompute"
+CLIENT_BIN="$REPO_ROOT/target/release/psyche-centralized-client"
 
 bold="\033[1m"
 cyan="\033[36m"
@@ -145,6 +146,7 @@ select_device() {
 setup_libtorch_env() {
   export LIBTORCH_USE_PYTORCH="${LIBTORCH_USE_PYTORCH:-1}"
   export LIBTORCH_BYPASS_VERSION_CHECK="${LIBTORCH_BYPASS_VERSION_CHECK:-1}"
+  export RUST_MIN_STACK="${RUST_MIN_STACK:-268435456}"
 
   local torch_lib_dir
   torch_lib_dir="$(detect_torch_lib_dir)"
@@ -165,9 +167,15 @@ main() {
     exit 1
   fi
 
+  if [[ ! -x "$CLIENT_BIN" ]]; then
+    printf "${red}Client binary not found at ${CLIENT_BIN}.${reset}\n"
+    printf "Build it first with: cargo build --release -p psyche-centralized-client\n"
+    exit 1
+  fi
+
   setup_libtorch_env
 
-  local run_id server_host server_port server_addr device micro_batch_size client_slot client_dir identity_key log_dir events_dir
+  local run_id server_host server_port server_addr device micro_batch_size client_slot client_dir identity_key log_dir
   run_id="$(prompt_default "Run ID" "$DEFAULT_RUN_ID")"
   server_host="$(prompt_default "Training server host" "$DEFAULT_SERVER_HOST")"
   server_port="$(prompt_default "Training server port" "$DEFAULT_SERVER_PORT")"
@@ -176,8 +184,7 @@ main() {
   client_dir="$STATE_DIR/clients/$client_slot"
   identity_key="$client_dir/identity.key"
   log_dir="$client_dir/logs"
-  events_dir="$client_dir/events"
-  mkdir -p "$log_dir" "$events_dir"
+  mkdir -p "$log_dir"
   ensure_identity_key "$identity_key"
   device="$(select_device)"
   micro_batch_size="$(prompt_default "Micro batch size" "1")"
@@ -198,13 +205,13 @@ main() {
     *) printf "Cancelled.\n"; exit 0 ;;
   esac
 
-  exec cargo run --release -p psyche-centralized-client -- train \
+  exec "$CLIENT_BIN" train \
     --run-id "$run_id" \
     --server-addr "$server_addr" \
+    --logs console \
     --device "$device" \
     --micro-batch-size "$micro_batch_size" \
     --identity-secret-key-path "$identity_key" \
-    --events-dir "$events_dir" \
     --write-log "$log_dir/client.log"
 }
 

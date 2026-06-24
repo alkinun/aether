@@ -115,6 +115,11 @@ def main(args):
         config = LlamaConfig.from_pretrained(args.config)
     elif model_type == "deepseek_v3":
         config = DeepseekV3Config.from_pretrained(args.config)
+        missing_fields = [field for field in ("rope_theta",) if not hasattr(config, field)]
+        if missing_fields:
+            raise RuntimeError(
+                f"DeepSeek config is missing required fields: {', '.join(missing_fields)}"
+            )
     else:
         raise ValueError(f"Unsupported model type `{model_type}`")
 

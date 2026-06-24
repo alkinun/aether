@@ -8,9 +8,6 @@ DEFAULT_SERVER_PORT="39405"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 STATE_DIR="$REPO_ROOT/.aethercompute"
-IDENTITY_KEY="$STATE_DIR/identity.key"
-LOG_DIR="$STATE_DIR/logs"
-EVENTS_DIR="$STATE_DIR/events"
 
 bold="\033[1m"
 cyan="\033[36m"
@@ -72,19 +69,21 @@ PY
 }
 
 ensure_identity_key() {
-  mkdir -p "$STATE_DIR" "$LOG_DIR" "$EVENTS_DIR"
+  local identity_key="$1"
 
-  if [[ -f "$IDENTITY_KEY" ]]; then
+  mkdir -p "$(dirname "$identity_key")"
+
+  if [[ -f "$identity_key" ]]; then
     return
   fi
 
-  printf "${yellow}No identity key found. Creating one at ${IDENTITY_KEY}.${reset}\n"
+  printf "${yellow}No identity key found. Creating one at ${identity_key}.${reset}\n"
   if command -v openssl >/dev/null 2>&1; then
-    openssl rand 32 > "$IDENTITY_KEY"
+    openssl rand 32 > "$identity_key"
   else
-    dd if=/dev/urandom of="$IDENTITY_KEY" bs=32 count=1 status=none
+    dd if=/dev/urandom of="$identity_key" bs=32 count=1 status=none
   fi
-  chmod 600 "$IDENTITY_KEY"
+  chmod 600 "$identity_key"
 }
 
 select_device() {
@@ -166,13 +165,20 @@ main() {
     exit 1
   fi
 
-  ensure_identity_key
   setup_libtorch_env
 
-  local run_id server_host server_port server_addr device micro_batch_size
+  local run_id server_host server_port server_addr device micro_batch_size client_slot client_dir identity_key log_dir events_dir
   run_id="$(prompt_default "Run ID" "$DEFAULT_RUN_ID")"
   server_host="$(prompt_default "Training server host" "$DEFAULT_SERVER_HOST")"
   server_port="$(prompt_default "Training server port" "$DEFAULT_SERVER_PORT")"
+  client_slot="$(prompt_default "Client slot/name" "1")"
+  client_slot="${client_slot//[^a-zA-Z0-9_.-]/_}"
+  client_dir="$STATE_DIR/clients/$client_slot"
+  identity_key="$client_dir/identity.key"
+  log_dir="$client_dir/logs"
+  events_dir="$client_dir/events"
+  mkdir -p "$log_dir" "$events_dir"
+  ensure_identity_key "$identity_key"
   device="$(select_device)"
   micro_batch_size="$(prompt_default "Micro batch size" "1")"
   server_addr="$server_host:$server_port"
@@ -180,9 +186,10 @@ main() {
   printf "\n${green}${bold}Ready to train${reset}\n"
   printf "  Run ID:        %s\n" "$run_id"
   printf "  Server:        %s\n" "$server_addr"
+  printf "  Client slot:   %s\n" "$client_slot"
   printf "  Device:        %s\n" "$device"
   printf "  Micro batch:   %s\n" "$micro_batch_size"
-  printf "  Identity key:  %s\n" "$IDENTITY_KEY"
+  printf "  Identity key:  %s\n" "$identity_key"
   printf "\n"
 
   read -r -p "Start client now? [Y/n]: " confirm
@@ -196,9 +203,9 @@ main() {
     --server-addr "$server_addr" \
     --device "$device" \
     --micro-batch-size "$micro_batch_size" \
-    --identity-secret-key-path "$IDENTITY_KEY" \
-    --events-dir "$EVENTS_DIR" \
-    --write-log "$LOG_DIR/client.log"
+    --identity-secret-key-path "$identity_key" \
+    --events-dir "$events_dir" \
+    --write-log "$log_dir/client.log"
 }
 
 main "$@"

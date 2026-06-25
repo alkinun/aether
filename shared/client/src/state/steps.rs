@@ -283,28 +283,11 @@ impl StepStateMachine {
                 return Ok(());
             }
 
-            let unfinished_clients: Vec<_> = self
-                .coordinator_state
-                .epoch_state
-                .clients
-                .iter()
-                .filter_map(|client| {
-                    if self.current_round.clients_finished.contains_key(&client.id) {
-                        None
-                    } else {
-                        Some(client.id)
-                    }
-                })
-                .collect();
-            if !unfinished_clients.is_empty() {
-                trace!(
-                    unfinished_clients = ?unfinished_clients,
-                    "Still waiting on {} warmup finish broadcasts",
-                    unfinished_clients.len()
-                );
-                return Ok(());
-            }
-
+            // Send our warmup witness without waiting for all other clients'
+            // warmup readies. The witness is an individual readiness signal —
+            // blocking on slow peers causes ALL clients to miss the warmup
+            // deadline and get kicked, stalling training entirely. The merkle
+            // root covers whatever broadcasts have arrived so far.
             if !self.sent_warmup_witness {
                 info!(name: "send_warmup_witness", epoch = self.coordinator_state.progress.epoch, "Sending warmup witness");
 

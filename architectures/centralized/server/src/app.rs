@@ -37,6 +37,13 @@ use wandb::LogData;
 use crate::dashboard::{DashboardState, DashboardTui};
 use crate::web::{self, LossPoint, WebState};
 
+/// Upper bound on the number of samples retained in `loss_history`. When this
+/// is reached the older half of the history is decimated (every other point
+/// dropped) instead of dropping the oldest samples, so the full step range is
+/// always represented while memory stays bounded. Recent data keeps full
+/// resolution; older data gets progressively coarser.
+const MAX_LOSS_HISTORY: usize = 5000;
+
 pub(super) type TabWidgetTypes = (
     DashboardTui,
     CoordinatorTui,
@@ -486,6 +493,20 @@ impl App {
         });
     }
 
+    fn push_loss_point(&mut self, point: LossPoint) {
+        if self.loss_history.len() >= MAX_LOSS_HISTORY {
+            let mid = self.loss_history.len() / 2;
+            let mut downsampled: Vec<LossPoint> = self.loss_history[..mid]
+                .iter()
+                .step_by(2)
+                .cloned()
+                .collect();
+            downsampled.extend_from_slice(&self.loss_history[mid..]);
+            self.loss_history = downsampled;
+        }
+        self.loss_history.push(point);
+    }
+
     fn on_disconnect(&mut self, from: PublicKey) -> Result<()> {
         let from_identity = NodeIdentity::from_single_key(*from.as_bytes());
         self.backend.pending_clients.remove(&from_identity);
@@ -552,10 +573,7 @@ impl App {
                                 unix_timestamp: Self::get_timestamp(),
                             };
                             self.log_to_wandb(&point);
-                            self.loss_history.push(point);
-                        }
-                        if self.loss_history.len() > 500 {
-                            self.loss_history.drain(0..self.loss_history.len() - 500);
+                            self.push_loss_point(point);
                         }
                         self.coordinator
                             .witness(&from_identity, witness, Self::get_timestamp())

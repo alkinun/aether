@@ -1,7 +1,7 @@
-use axum::{extract::State, response::Html, routing::get, Router};
+use axum::{Router, extract::State, response::Html, routing::get};
 use psyche_coordinator::{
+    ClientState, Coordinator, NUM_STORED_ROUNDS, RunState,
     model::{Checkpoint, LLMArchitecture, LLMTrainingDataType, Model},
-    ClientState, Coordinator, RunState, NUM_STORED_ROUNDS,
 };
 use psyche_core::{LearningRateSchedule, OptimizerDefinition};
 use serde::Serialize;
@@ -13,6 +13,7 @@ pub struct LossPoint {
     pub step: u32,
     pub loss: f32,
     pub tokens_per_sec: f32,
+    pub unix_timestamp: u64,
 }
 
 #[derive(Clone)]
@@ -38,6 +39,7 @@ pub fn start(
         .route("/partials/rounds", get(rounds_partial))
         .route("/partials/config", get(config_partial))
         .route("/partials/model", get(model_partial))
+        .route("/partials/timing", get(timing_partial))
         .route("/partials/loss", get(loss_partial))
         .route("/partials/throughput", get(throughput_partial))
         .route("/api/state", get(api_state))
@@ -414,6 +416,130 @@ async fn model_partial(State(state): State<SharedState>) -> Html<String> {
     }
 }
 
+fn current_unix_timestamp() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
+}
+
+fn format_eta(secs: Option<u64>) -> String {
+    secs.map(format_duration).unwrap_or_else(|| "-".into())
+}
+
+fn estimate_remaining_time(remaining_tokens: f64, tokens_per_sec: f64) -> Option<u64> {
+    if remaining_tokens <= 0.0 {
+        Some(0)
+    } else if tokens_per_sec.is_finite() && tokens_per_sec > 0.0 {
+        Some((remaining_tokens / tokens_per_sec).ceil() as u64)
+    } else {
+        None
+    }
+}
+
+fn weighted_tokens_per_sec(points: &[&LossPoint]) -> Option<f64> {
+    if points.is_empty() {
+        return None;
+    }
+
+    let mut weighted_total = 0.0;
+    let mut total_weight = 0.0;
+    for i in 0..points.len() {
+        let weight = if i + 1 < points.len() {
+            points[i + 1]
+                .unix_timestamp
+                .saturating_sub(points[i].unix_timestamp)
+                .max(1) as f64
+        } else if i > 0 {
+            points[i]
+                .unix_timestamp
+                .saturating_sub(points[i - 1].unix_timestamp)
+                .max(1) as f64
+        } else {
+            1.0
+        };
+        weighted_total += points[i].tokens_per_sec as f64 * weight;
+        total_weight += weight;
+    }
+
+    if total_weight > 0.0 {
+        Some(weighted_total / total_weight)
+    } else {
+        None
+    }
+}
+
+async fn timing_partial(State(state): State<SharedState>) -> Html<String> {
+    let s = state.lock().unwrap();
+    match &s.coordinator {
+        Some(coord) => {
+            let now = current_unix_timestamp();
+            let points: Vec<&LossPoint> = s
+                .loss_history
+                .iter()
+                .filter(|p| p.tokens_per_sec.is_finite() && p.tokens_per_sec > 0.0)
+                .collect();
+            let elapsed = points
+                .first()
+                .map(|p| now.saturating_sub(p.unix_timestamp))
+                .or_else(|| {
+                    (coord.run_state_start_unix_timestamp > 0)
+                        .then(|| now.saturating_sub(coord.run_state_start_unix_timestamp))
+                });
+
+            let remaining_steps = coord.config.total_steps.saturating_sub(coord.progress.step);
+            let tokens_per_step = coord.get_target_global_batch_size(coord.current_round()) as f64
+                * coord.get_sequence_length() as f64;
+            let remaining_tokens = remaining_steps as f64 * tokens_per_step;
+            let current_tps = points.last().map(|p| p.tokens_per_sec as f64);
+            let avg_tps = if points.is_empty() {
+                None
+            } else {
+                Some(
+                    points.iter().map(|p| p.tokens_per_sec as f64).sum::<f64>()
+                        / points.len() as f64,
+                )
+            };
+            let weighted_tps = weighted_tokens_per_sec(&points);
+
+            let avg_eta = estimate_remaining_time(remaining_tokens, avg_tps.unwrap_or(0.0));
+            let current_eta = estimate_remaining_time(remaining_tokens, current_tps.unwrap_or(0.0));
+            let weighted_eta =
+                estimate_remaining_time(remaining_tokens, weighted_tps.unwrap_or(0.0));
+
+            Html(format!(
+                r#"<div class="timing-card">
+<div class="timing-summary">
+  <div><span class="hint">Elapsed</span><b>{elapsed}</b></div>
+  <div><span class="hint">Remaining Steps</span><b>{remaining_steps}</b></div>
+  <div><span class="hint">Tokens/Step</span><b>{tokens_per_step:.0}</b></div>
+</div>
+<div class="eta-picker" data-eta-picker>
+  <label><input type="radio" name="eta-mode" value="weighted" checked> Weighted avg <b>{weighted_eta}</b> <span class="hint">({weighted_tps})</span></label>
+  <label><input type="radio" name="eta-mode" value="average"> Overall avg <b>{avg_eta}</b> <span class="hint">({avg_tps})</span></label>
+  <label><input type="radio" name="eta-mode" value="current"> Current speed <b>{current_eta}</b> <span class="hint">({current_tps})</span></label>
+</div>
+</div>"#,
+                elapsed = format_eta(elapsed),
+                remaining_steps = remaining_steps,
+                tokens_per_step = tokens_per_step,
+                weighted_eta = format_eta(weighted_eta),
+                avg_eta = format_eta(avg_eta),
+                current_eta = format_eta(current_eta),
+                weighted_tps = format_tps(weighted_tps),
+                avg_tps = format_tps(avg_tps),
+                current_tps = format_tps(current_tps),
+            ))
+        }
+        None => Html(r#"<i>Waiting for coordinator data...</i>"#.into()),
+    }
+}
+
+fn format_tps(tps: Option<f64>) -> String {
+    tps.map(|v| format!("{v:.1} tok/s"))
+        .unwrap_or_else(|| "-".into())
+}
+
 fn render_loss_svg(losses: &[LossPoint]) -> String {
     let width: f64 = 800.0;
     let height: f64 = 250.0;
@@ -462,7 +588,7 @@ fn render_loss_svg(losses: &[LossPoint]) -> String {
         let val = min_loss as f64 + (max_loss - min_loss) as f64 * (i as f64 / y_ticks as f64);
         let y = plot_y1 - (i as f64 / y_ticks as f64) * plot_h;
         y_labels.push_str(&format!(
-            r##"<text x="{}" y="{}" text-anchor="end">{:.4}</text>"##,
+            r##"<text x="{}" y="{}" text-anchor="end" fill="#c9d1d9">{:.4}</text>"##,
             pad_left - 5.0,
             y + 4.0,
             val,
@@ -475,7 +601,7 @@ fn render_loss_svg(losses: &[LossPoint]) -> String {
         let val = min_step + (max_step - min_step) * (i as f64 / x_ticks as f64);
         let x = plot_x0 + (i as f64 / x_ticks as f64) * plot_w;
         x_labels.push_str(&format!(
-            r##"<text x="{x}" y="{}" text-anchor="middle">{:.0}</text>"##,
+            r##"<text x="{x}" y="{}" text-anchor="middle" fill="#c9d1d9">{:.0}</text>"##,
             height - 8.0,
             val,
         ));
@@ -488,7 +614,7 @@ fn render_loss_svg(losses: &[LossPoint]) -> String {
         r##"<div>
 <b>Latest Loss:</b> {last_loss:.4} &nbsp; <b>Min:</b> {min_loss:.4} &nbsp; <b>Max:</b> {max_loss:.4} &nbsp; <b>Avg:</b> {avg_loss:.4} &nbsp; Steps: {min_step:.0} - {max_step:.0} &nbsp; Points: {n}
 <br><br>
-<svg width="{width}" height="{height}" viewBox="0 0 {width} {height}" xmlns="http://www.w3.org/2000/svg">
+<svg width="{width}" height="{height}" viewBox="0 0 {width} {height}" xmlns="http://www.w3.org/2000/svg" class="chart-svg">
 <rect x="{plot_x0}" y="{plot_y0}" width="{plot_w}" height="{plot_h}" fill="none" stroke="#30363d"/>
 {y_labels}
 {x_labels}
@@ -565,7 +691,7 @@ fn render_throughput_svg(losses: &[LossPoint]) -> String {
         let val = min_tps as f64 + (max_tps - min_tps) as f64 * (i as f64 / y_ticks as f64);
         let y = plot_y1 - (i as f64 / y_ticks as f64) * plot_h;
         y_labels.push_str(&format!(
-            r##"<text x="{}" y="{}" text-anchor="end">{:.0}</text>"##,
+            r##"<text x="{}" y="{}" text-anchor="end" fill="#c9d1d9">{:.0}</text>"##,
             pad_left - 5.0,
             y + 4.0,
             val,
@@ -578,7 +704,7 @@ fn render_throughput_svg(losses: &[LossPoint]) -> String {
         let val = min_step + (max_step - min_step) * (i as f64 / x_ticks as f64);
         let x = plot_x0 + (i as f64 / x_ticks as f64) * plot_w;
         x_labels.push_str(&format!(
-            r##"<text x="{x}" y="{}" text-anchor="middle">{:.0}</text>"##,
+            r##"<text x="{x}" y="{}" text-anchor="middle" fill="#c9d1d9">{:.0}</text>"##,
             height - 8.0,
             val,
         ));
@@ -591,7 +717,7 @@ fn render_throughput_svg(losses: &[LossPoint]) -> String {
         r##"<div>
 <b>Latest Tokens/s:</b> {last_tps:.1} &nbsp; <b>Avg:</b> {avg_tps:.1} &nbsp; <b>Peak:</b> {max_tps:.1} &nbsp; Steps: {min_step:.0} - {max_step:.0} &nbsp; Points: {n}
 <br><br>
-<svg width="{width}" height="{height}" viewBox="0 0 {width} {height}" xmlns="http://www.w3.org/2000/svg">
+<svg width="{width}" height="{height}" viewBox="0 0 {width} {height}" xmlns="http://www.w3.org/2000/svg" class="chart-svg">
 <rect x="{plot_x0}" y="{plot_y0}" width="{plot_w}" height="{plot_h}" fill="none" stroke="#30363d"/>
 {y_labels}
 {x_labels}
@@ -701,8 +827,34 @@ b { color: #f0f6fc; }
 a { color: #58a6ff; }
 .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1rem 1.25rem; margin-top: 1rem; align-items: start; }
 svg { display: block; width: 100%; height: auto; }
+.chart-svg text { fill: #c9d1d9; font-size: 11px; }
+.timing-card { border: 1px solid #30363d; padding: .75rem; background: #010409; }
+.timing-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: .75rem; margin-bottom: .75rem; }
+.timing-summary span, .timing-summary b { display: block; }
+.eta-picker { display: grid; gap: .4rem; }
+.eta-picker label { border: 1px solid #30363d; padding: .45rem .55rem; cursor: pointer; }
+.eta-picker label.selected { border-color: #58a6ff; background: #0d1b2a; }
+.eta-picker input { margin-right: .45rem; }
 section { margin-top: 1.25rem; }
 </style>
+<script>
+function initEtaPickers(root) {
+  (root || document).querySelectorAll('[data-eta-picker]').forEach((picker) => {
+    const saved = localStorage.getItem('psycheEtaMode') || 'weighted';
+    picker.querySelectorAll('input[name="eta-mode"]').forEach((input) => {
+      input.checked = input.value === saved;
+      input.closest('label').classList.toggle('selected', input.checked);
+      input.onchange = () => {
+        localStorage.setItem('psycheEtaMode', input.value);
+        picker.querySelectorAll('label').forEach((label) => label.classList.remove('selected'));
+        input.closest('label').classList.add('selected');
+      };
+    });
+  });
+}
+document.addEventListener('DOMContentLoaded', () => initEtaPickers(document));
+document.addEventListener('htmx:afterSwap', (event) => initEtaPickers(event.target));
+</script>
 </head>
 <body>
 <header class="topbar"><div class="wrap">
@@ -718,6 +870,10 @@ section { margin-top: 1.25rem; }
   <div>
     <h2>Clients</h2>
     <div hx-get="/partials/clients" hx-trigger="every 2s" hx-swap="innerHTML"><i>Loading...</i></div>
+  </div>
+  <div>
+    <h2>Timing</h2>
+    <div hx-get="/partials/timing" hx-trigger="every 2s" hx-swap="innerHTML"><i>Loading...</i></div>
   </div>
   <div>
     <h2>Configuration</h2>

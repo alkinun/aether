@@ -486,6 +486,7 @@ impl App {
                                 step: witness_metadata.step,
                                 loss: witness_metadata.loss,
                                 tokens_per_sec: witness_metadata.tokens_per_sec,
+                                unix_timestamp: Self::get_timestamp(),
                             });
                         }
                         if self.loss_history.len() > 500 {

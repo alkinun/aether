@@ -701,6 +701,16 @@ impl StepStateMachine {
     }
 
     async fn apply_state(&mut self, state: Coordinator) -> Result<(), StepError> {
+        if self.coordinator_state.run_state == RunState::Warmup
+            && matches!(
+                state.run_state,
+                RunState::WaitingForMembers | RunState::Paused
+            )
+        {
+            self.sent_warmup_finished = false;
+            self.sent_warmup_witness = false;
+        }
+
         let client_index = match state
             .epoch_state
             .clients

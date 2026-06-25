@@ -7,8 +7,8 @@ cooldown_time = 5
 epoch_time = 120
 max_round_train_time = 60
 round_witness_time = 5
-min_clients = 4
-init_min_clients = 4
+min_clients = 1
+init_min_clients = 1
 
 # 62,500 * 32 * 512 = 1,024,000,000 tokens
 global_batch_size_start = 32

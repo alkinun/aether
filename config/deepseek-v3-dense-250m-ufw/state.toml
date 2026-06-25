@@ -2,7 +2,7 @@ run_id = "deepseek-v3-dense-250m-1b"
 run_state = "WaitingForMembers"
 
 [config]
-warmup_time = 15
+warmup_time = 300
 cooldown_time = 5
 epoch_time = 120
 max_round_train_time = 60

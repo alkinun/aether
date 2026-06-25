@@ -1,14 +1,14 @@
 use crate::{
-    model::{Checkpoint, Model},
     Commitment, Committee, CommitteeProof, CommitteeSelection, WitnessProof,
+    model::{Checkpoint, Model},
 };
 
 use anchor_lang::{
-    prelude::{borsh, msg},
     AnchorDeserialize, AnchorSerialize, InitSpace,
+    prelude::{borsh, msg},
 };
 use bytemuck::{Pod, Zeroable};
-use psyche_core::{sha256, Bloom, FixedString, FixedVec, MerkleRoot, NodeIdentity, SmallBoolean};
+use psyche_core::{Bloom, FixedString, FixedVec, MerkleRoot, NodeIdentity, SmallBoolean, sha256};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashSet, hash::Hash};
 use ts_rs::TS;
@@ -495,7 +495,12 @@ impl Coordinator {
             .map_err(|_| CoordinatorError::WitnessesFull)?;
 
         if round.witnesses.len() == witness_nodes {
-            self.start_round_train(unix_timestamp, random_seed, 0);
+            self.move_clients_without_warmup_witness_to_exited(0);
+            if (self.epoch_state.clients.len() as u16) < self.config.min_clients {
+                self.start_waiting_for_members(unix_timestamp);
+            } else {
+                self.start_round_train(unix_timestamp, random_seed, 0);
+            }
         }
 
         Ok(())
@@ -987,7 +992,10 @@ impl Coordinator {
         random_seed: u64,
     ) -> std::result::Result<TickResult, CoordinatorError> {
         if self.check_timeout(unix_timestamp, self.config.warmup_time) {
-            self.start_round_train(unix_timestamp, random_seed, 0);
+            self.move_clients_without_warmup_witness_to_exited(0);
+            if (self.epoch_state.clients.len() as u16) >= self.config.min_clients {
+                self.start_round_train(unix_timestamp, random_seed, 0);
+            }
         } else {
             self.move_clients_to_exited(0);
         }
@@ -1185,6 +1193,33 @@ impl Coordinator {
             } else {
                 true
             }
+        });
+    }
+
+    fn move_clients_without_warmup_witness_to_exited(&mut self, height: u32) {
+        let warmup_witnesses: HashSet<usize> = self
+            .current_round_unchecked()
+            .witnesses
+            .iter()
+            .map(|witness| witness.proof.index as usize)
+            .collect();
+
+        // WARNING: O(n) on number of clients, need to refactor
+        let mut client_index = 0usize;
+        self.epoch_state.clients.retain(|client| {
+            let keep = warmup_witnesses.contains(&client_index);
+            client_index += 1;
+
+            if !keep {
+                self.epoch_state.exited_clients.push(*client).unwrap();
+                self.epoch_state
+                    .exited_clients
+                    .last_mut()
+                    .unwrap()
+                    .exited_height = height;
+            }
+
+            keep
         });
     }
 

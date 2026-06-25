@@ -547,18 +547,14 @@ async fn timing_partial(State(state): State<SharedState>) -> Html<String> {
                 estimate_remaining_time(remaining_tokens, weighted_tps.unwrap_or(0.0));
 
             Html(format!(
-                r#"<div class="timing-card">
-<div class="timing-summary">
-  <div><span class="hint">Elapsed</span><b>{elapsed}</b></div>
-  <div><span class="hint">Remaining Steps</span><b>{remaining_steps}</b></div>
-  <div><span class="hint">Tokens/Step</span><b>{tokens_per_step:.0}</b></div>
-</div>
-<div class="eta-picker" data-eta-picker>
-  <label><input type="radio" name="eta-mode" value="weighted" checked> Weighted avg <b>{weighted_eta}</b> <span class="hint">({weighted_tps})</span></label>
-  <label><input type="radio" name="eta-mode" value="average"> Overall avg <b>{avg_eta}</b> <span class="hint">({avg_tps})</span></label>
-  <label><input type="radio" name="eta-mode" value="current"> Current speed <b>{current_eta}</b> <span class="hint">({current_tps})</span></label>
-</div>
-</div>"#,
+                r#"<table border="1">
+<tr><td><b>Elapsed</b></td><td>{elapsed}</td></tr>
+<tr><td><b>Remaining Steps</b></td><td>{remaining_steps}</td></tr>
+<tr><td><b>Tokens / Step</b></td><td>{tokens_per_step:.0}</td></tr>
+<tr><td><b>ETA (weighted avg)</b></td><td>{weighted_eta} <span class="hint">({weighted_tps})</span></td></tr>
+<tr><td><b>ETA (overall avg)</b></td><td>{avg_eta} <span class="hint">({avg_tps})</span></td></tr>
+<tr><td><b>ETA (current speed)</b></td><td>{current_eta} <span class="hint">({current_tps})</span></td></tr>
+</table>"#,
                 elapsed = format_eta(elapsed),
                 remaining_steps = remaining_steps,
                 tokens_per_step = tokens_per_step,
@@ -850,7 +846,7 @@ fn format_data_type(dt: &LLMTrainingDataType) -> &'static str {
 const INDEX_HTML: &str = r##"<!DOCTYPE html>
 <html>
 <head>
-<title>Psyche Monitor</title>
+<title>Aether Training Monitor</title>
 <script src="https://unpkg.com/htmx.org@2.0.4"></script>
 <style>
 body { font-family: monospace; margin: 0; background: #0d1117; color: #c9d1d9; font-size: 13px; }
@@ -868,72 +864,49 @@ a { color: #58a6ff; }
 .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1rem 1.25rem; margin-top: 1rem; align-items: start; }
 svg { display: block; width: 100%; height: auto; }
 .chart-svg text { fill: #c9d1d9; font-size: 11px; }
-.timing-card { border: 1px solid #30363d; padding: .75rem; background: #010409; }
-.timing-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: .75rem; margin-bottom: .75rem; }
-.timing-summary span, .timing-summary b { display: block; }
-.eta-picker { display: grid; gap: .4rem; }
-.eta-picker label { border: 1px solid #30363d; padding: .45rem .55rem; cursor: pointer; }
-.eta-picker label.selected { border-color: #58a6ff; background: #0d1b2a; }
-.eta-picker input { margin-right: .45rem; }
-section { margin-top: 1.25rem; }
+.panel { overflow-x: auto; }
 </style>
-<script>
-function initEtaPickers(root) {
-  (root || document).querySelectorAll('[data-eta-picker]').forEach((picker) => {
-    const saved = localStorage.getItem('psycheEtaMode') || 'weighted';
-    picker.querySelectorAll('input[name="eta-mode"]').forEach((input) => {
-      input.checked = input.value === saved;
-      input.closest('label').classList.toggle('selected', input.checked);
-      input.onchange = () => {
-        localStorage.setItem('psycheEtaMode', input.value);
-        picker.querySelectorAll('label').forEach((label) => label.classList.remove('selected'));
-        input.closest('label').classList.add('selected');
-      };
-    });
-  });
-}
-document.addEventListener('DOMContentLoaded', () => initEtaPickers(document));
-document.addEventListener('htmx:afterSwap', (event) => initEtaPickers(event.target));
-</script>
 </head>
 <body>
 <header class="topbar"><div class="wrap">
-  <h1>Psyche Monitor</h1>
+  <h1>Aether Training Monitor</h1>
   <span class="hint">live &middot; auto-refresh 2&ndash;5s</span>
 </div></header>
 <div class="wrap">
 <div class="grid">
-  <div>
+  <div class="panel">
     <h2>Overview</h2>
     <div hx-get="/partials/overview" hx-trigger="every 2s" hx-swap="innerHTML"><i>Loading...</i></div>
   </div>
-  <div>
-    <h2>Clients</h2>
-    <div hx-get="/partials/clients" hx-trigger="every 2s" hx-swap="innerHTML"><i>Loading...</i></div>
-  </div>
-  <div>
-    <h2>Timing</h2>
-    <div hx-get="/partials/timing" hx-trigger="every 2s" hx-swap="innerHTML"><i>Loading...</i></div>
-  </div>
-  <div>
+  <div class="panel">
     <h2>Configuration</h2>
     <div hx-get="/partials/config" hx-trigger="every 5s" hx-swap="innerHTML"><i>Loading...</i></div>
   </div>
-  <div>
+  <div class="panel">
     <h2>Model</h2>
     <div hx-get="/partials/model" hx-trigger="every 5s" hx-swap="innerHTML"><i>Loading...</i></div>
   </div>
 </div>
-<section>
-  <h2>Rounds</h2>
-  <div hx-get="/partials/rounds" hx-trigger="every 3s" hx-swap="innerHTML"><i>Loading...</i></div>
-</section>
 <div class="grid">
-  <div>
+  <div class="panel">
+    <h2>Clients</h2>
+    <div hx-get="/partials/clients" hx-trigger="every 2s" hx-swap="innerHTML"><i>Loading...</i></div>
+  </div>
+  <div class="panel">
+    <h2>Rounds</h2>
+    <div hx-get="/partials/rounds" hx-trigger="every 3s" hx-swap="innerHTML"><i>Loading...</i></div>
+  </div>
+  <div class="panel">
+    <h2>Timing</h2>
+    <div hx-get="/partials/timing" hx-trigger="every 2s" hx-swap="innerHTML"><i>Loading...</i></div>
+  </div>
+</div>
+<div class="grid">
+  <div class="panel">
     <h2>Loss</h2>
     <div hx-get="/partials/loss" hx-trigger="every 5s" hx-swap="innerHTML"><i>Loading...</i></div>
   </div>
-  <div>
+  <div class="panel">
     <h2>Throughput (Tokens/sec)</h2>
     <div hx-get="/partials/throughput" hx-trigger="every 5s" hx-swap="innerHTML"><i>Loading...</i></div>
   </div>

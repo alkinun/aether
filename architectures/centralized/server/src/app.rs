@@ -790,14 +790,14 @@ impl From<&App> for DashboardState {
 ///
 /// - `WANDB_API_KEY`  (required to enable)
 /// - `WANDB_PROJECT`  (default: `psyche`)
-/// - `WANDB_RUN`      (default: `server-<run_id>`)
+/// - `WANDB_RUN`      (default: `server-<run_id>-<UTC timestamp>`)
 /// - `WANDB_ENTITY`   (optional)
 /// - `WANDB_GROUP`    (optional)
 async fn init_wandb(run_id: &str) -> Option<Arc<wandb::Run>> {
     let api_key = std::env::var("WANDB_API_KEY").ok()?;
     let project = std::env::var("WANDB_PROJECT").unwrap_or_else(|_| "aethercompute".to_string());
     let run_name = std::env::var("WANDB_RUN")
-        .unwrap_or_else(|_| format!("server-{run_id}-{}", chrono::Utc::now().format("%Y-%m-%d")));
+        .unwrap_or_else(|_| format!("server-{run_id}-{}", chrono::Utc::now().format("%Y-%m-%d_%H-%M-%S")));
     let entity = std::env::var("WANDB_ENTITY").ok();
     let group = std::env::var("WANDB_GROUP").ok();
 

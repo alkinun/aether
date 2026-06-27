@@ -11,6 +11,7 @@ mod config;
 mod detect;
 mod logo;
 mod prepare;
+mod requirements;
 mod terminal;
 
 use anyhow::Result;

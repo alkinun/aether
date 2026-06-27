@@ -11,6 +11,7 @@ use crate::{
     detect,
     logo,
     prepare::{self, BuildJob, BuildState},
+    requirements,
     terminal::TerminalGuard,
 };
 use anyhow::Result;
@@ -68,11 +69,17 @@ pub struct App {
     build_elapsed: std::time::Duration,
     build_failed_msg: String,
     launch: Option<LaunchConfig>,
+    form_error: Option<String>,
 }
 
 impl App {
     pub fn new() -> Self {
         let devices = detect::detect_devices();
+        // Pre-fill the micro-batch from the best GPU's VRAM when we can; fall
+        // back to the conservative default otherwise. The field stays editable.
+        let micro_batch = requirements::recommended_micro_batch(detect::best_gpu_vram_mib())
+            .map(|n| n.to_string())
+            .unwrap_or_else(|| config::DEFAULT_MICRO_BATCH.to_string());
         Self {
             screen: Screen::Welcome,
             frame: 0,
@@ -83,7 +90,7 @@ impl App {
                 server_host: config::DEFAULT_SERVER_HOST.to_string(),
                 server_port: config::DEFAULT_SERVER_PORT.to_string(),
                 slot: config::DEFAULT_SLOT.to_string(),
-                micro_batch: config::DEFAULT_MICRO_BATCH.to_string(),
+                micro_batch,
                 device_idx: 0,
                 focus: 0,
             },
@@ -94,6 +101,7 @@ impl App {
             build_elapsed: std::time::Duration::ZERO,
             build_failed_msg: String::new(),
             launch: None,
+            form_error: None,
         }
     }
 
@@ -254,9 +262,25 @@ impl App {
         }
         let i = self.form.device_idx as i32;
         self.form.device_idx = ((i + dir).rem_euclid(n as i32)) as usize;
+        // Changing the device may resolve the VRAM-gate error; clear it so the
+        // message only shows while the offending device is selected.
+        self.form_error = None;
     }
 
     fn proceed_to_identity(&mut self) -> Flow {
+        // Hardware gate: a CUDA selection below the VRAM floor would OOM
+        // seconds into the run, so refuse to advance and explain why.
+        let dev = self.devices[self.form.device_idx].clone();
+        if !requirements::meets_minimum(dev.vram_mib) {
+            let mib = dev.vram_mib.unwrap_or(0);
+            self.form_error = Some(format!(
+                "{} ({} MiB) is below the {} MiB minimum — choose another device.",
+                dev.value, mib, requirements::MIN_VRAM_MIB
+            ));
+            return Flow::Continue;
+        }
+        self.form_error = None;
+
         // Validate.
         if self.form.run_id.trim().is_empty() {
             return Flow::Continue;
@@ -539,6 +563,12 @@ impl App {
             .style(Style::default().fg(if focused { brand::INK } else { brand::DIM }))
             .block(block);
         f.render_widget(p, btn);
+
+        // Inline hardware-gate message (e.g. below-minimum VRAM GPU selected).
+        if let Some(msg) = &self.form_error {
+            let y = btn.y + btn.height;
+            draw_centered_line(f, inner, y, msg, Style::default().fg(brand::DANGER));
+        }
     }
 
     fn draw_field(&self, f: &mut Frame, r: Rect, label: &str, value: &str, focused: bool) {
@@ -1002,5 +1032,29 @@ mod tests {
         ));
         assert!(matches!(flow, Flow::Continue));
         assert_eq!(app.screen, Screen::Form); // did not advance
+    }
+
+    #[test]
+    fn below_min_gpu_blocks_start_and_clears_on_change() {
+        let mut app = App::new();
+        app.screen = Screen::Form;
+        // Inject a deterministic device list (App::new reads the real host).
+        app.devices = vec![
+            detect::DeviceOption { value: "auto".into(), label: "Auto".into(), tag: "AUTO", vram_mib: None },
+            detect::DeviceOption { value: "cuda:0".into(), label: "Weak GPU".into(), tag: "CUDA", vram_mib: Some(2048) },
+            detect::DeviceOption { value: "cuda:1".into(), label: "Big GPU".into(), tag: "CUDA", vram_mib: Some(24 * 1024) },
+        ];
+        // Select the below-minimum GPU and press Start (focus 6 = Start button).
+        app.form.device_idx = 1;
+        app.form.focus = 6;
+        let flow = app.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+        assert!(matches!(flow, Flow::Continue));
+        assert_eq!(app.screen, Screen::Form); // gated — did not advance
+        assert!(app.form_error.is_some());
+
+        // Moving to a qualifying GPU clears the error.
+        app.cycle_device(1);
+        assert_eq!(app.form.device_idx, 2);
+        assert!(app.form_error.is_none());
     }
 }

@@ -1,0 +1,20 @@
+# Training-data server config — passed to `psyche-centralized-server run` via
+# --data-config. Only consulted because state.toml declares
+#   [model.LLM.data_location] Server = "train.aethercompute.org:39406"
+# which makes the coordinator also host a DataProviderTcpServer, so volunteers
+# pull their assigned shards over the network instead of each needing a local
+# copy of the 20 GB dataset.
+#
+# The launcher's server_command() picks this up automatically whenever it sits
+# next to state.toml (same convention as the llama2-20m-dolma configs).
+dir = "data/ultra-fineweb-deepseek-512-bin"
+token_size = "FourBytes"
+seq_len = 512
+# Order in which the server traverses the dataset. Any fixed 32 bytes are valid;
+# this is server-internal only. Since the server is the single authoritative
+# resolver of sequence indices -> bytes, all clients stay consistent automatically
+# regardless of this value.
+shuffle_seed = [
+  1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16,
+  17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32,
+]

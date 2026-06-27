@@ -327,6 +327,12 @@ def server_command(config: dict) -> list[str]:
         "--web-port",
         str(server["live_web_port"]),
     ]
+    # When a data.toml sits next to state.toml, the run is in Server data mode:
+    # the coordinator also hosts a DataProviderTcpServer so volunteers fetch
+    # their assigned shards instead of needing a local dataset copy.
+    data_config = Path(server["state_path"]).with_name("data.toml")
+    if data_config.exists():
+        command.extend(["--data-config", str(data_config)])
     if not server.get("tui", False):
         command.extend(["--tui=false"])
     return command

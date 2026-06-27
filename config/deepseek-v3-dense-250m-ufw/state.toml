@@ -26,10 +26,18 @@ data_type = "Pretraining"
 max_seq_len = 512
 cold_start_warmup_steps = 0
 
-[model.LLM.data_location.Local]
-path = "data/ultra-fineweb-deepseek-512-bin"
-token_size_in_bytes = "FourBytes"
-shuffle = "DontShuffle"
+# Server data mode: the coordinator also hosts a DataProviderTcpServer (see the
+# companion data.toml, passed via --data-config). Volunteers fetch only their
+# assigned shard per round instead of each needing a local dataset copy. Because
+# the coordinator hands each sequence to exactly one client once, total egress
+# over the whole run is ~3.8 GB, not the full 20 GB on disk.
+#
+# The host MUST be the publicly reachable address volunteers connect to, and the
+# port is both what they connect on and what the server binds (0.0.0.0:<port>).
+# Expose this port (39406) in your firewall, and update the host if your server
+# isn't reachable at this domain.
+[model.LLM.data_location]
+Server = "train.aethercompute.org:39406"
 
 [model.LLM.checkpoint.Hub]
 repo_id = "aethercompute/deepseek-v3-dense-250m-1b"

@@ -32,12 +32,13 @@ cold_start_warmup_steps = 0
 # the coordinator hands each sequence to exactly one client once, total egress
 # over the whole run is ~3.8 GB, not the full 20 GB on disk.
 #
-# The host MUST be the publicly reachable address volunteers connect to, and the
-# port is both what they connect on and what the server binds (0.0.0.0:<port>).
-# Expose this port (39406) in your firewall, and update the host if your server
-# isn't reachable at this domain.
+# This must be IP:PORT with the currently-deployed server binary — it parses the
+# value as a SocketAddr, which rejects DNS names. Once psyche-centralized-server
+# is rebuilt with the hostname fix in server/src/app.rs, switch this back to
+# "train.aethercompute.org:39406". The host is what volunteers connect to; the
+# port is both that and what the server binds (0.0.0.0:<port>) — expose 39406.
 [model.LLM.data_location]
-Server = "train.aethercompute.org:39406"
+Server = "46.224.237.28:39406"
 
 [model.LLM.checkpoint.Hub]
 repo_id = "aethercompute/deepseek-v3-dense-250m-1b"

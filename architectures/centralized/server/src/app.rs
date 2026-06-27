@@ -245,10 +245,19 @@ impl App {
                             }
                         }
 
-                        let server_addr: SocketAddr = String::from(url).parse().map_err(|e| {
-                            anyhow!("Failed to parse training data server URL {:?}: {}", url, e)
-                        })?;
-                        let data_server_port = server_addr.port();
+                        // The data server URL is "host:port". The server only needs the port
+                        // (it binds 0.0.0.0); clients resolve the host themselves via DNS, so
+                        // accept hostnames as well as IP literals — SocketAddr::from_str
+                        // rejects the former, which broke domains like "host.example:39406".
+                        let url_str = String::from(url);
+                        let data_server_port = url_str
+                            .rsplit_once(':')
+                            .and_then(|(_, port_str)| port_str.trim().parse::<u16>().ok())
+                            .ok_or_else(|| {
+                                anyhow!(
+                                    "Failed to parse training data server URL {url_str:?}: expected \"host:port\""
+                                )
+                            })?;
                         let DataServerInfo {
                             dir,
                             seq_len,

@@ -205,6 +205,11 @@ pub struct TrainArgs {
     #[clap(long, default_value_t = 3, env)]
     pub keep_steps: u32,
 
+    /// Save and upload a checkpoint only every N epochs (1 = every epoch).
+    /// Useful to cap HuggingFace upload volume on long runs.
+    #[clap(long, default_value_t = 1, env)]
+    pub checkpoint_epoch_interval: u32,
+
     /// If provided, events will be written to a subdir in here, named after the node's ID.
     #[clap(long, env)]
     pub events_dir: Option<PathBuf>,
@@ -273,6 +278,7 @@ impl TrainArgs {
             upload_info,
             delete_old_steps: self.delete_old_steps,
             keep_steps: self.keep_steps,
+            epoch_interval: self.checkpoint_epoch_interval.max(1),
         }))
     }
 

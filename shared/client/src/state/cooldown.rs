@@ -204,10 +204,18 @@ impl CooldownStepMetadata {
                     checkpoint_dir,
                     delete_old_steps,
                     keep_steps,
+                    epoch_interval,
                 }) = checkpoint_info
                 else {
                     return Ok((evals, None));
                 };
+
+                // Throttle checkpointing to every N epochs. The P2P model share
+                // above still happens every epoch; only the local save + HF/GCS
+                // upload is skipped on off-interval epochs.
+                if epoch_interval > 1 && epoch % epoch_interval != 0 {
+                    return Ok((evals, None));
+                }
 
                 let upload_handle = tokio::task::spawn(async move {
                     let path = checkpoint_dir.join(format!("{run_id}-step{step}"));

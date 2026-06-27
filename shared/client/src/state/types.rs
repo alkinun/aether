@@ -21,6 +21,8 @@ pub struct CheckpointConfig {
     pub checkpoint_dir: PathBuf,
     pub delete_old_steps: bool,
     pub keep_steps: u32,
+    /// Save + upload a checkpoint only every N epochs (1 = every epoch).
+    pub epoch_interval: u32,
 }
 
 #[derive(Debug)]

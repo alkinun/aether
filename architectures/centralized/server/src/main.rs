@@ -1,6 +1,5 @@
 mod app;
 mod dashboard;
-mod ssh_monitor;
 mod web;
 
 use anyhow::{bail, Context, Result};
@@ -101,14 +100,6 @@ struct RunArgs {
     /// Port for the HTMX web dashboard.
     #[clap(long, default_value_t = 8080)]
     web_port: u16,
-
-    /// Optional port for the read-only SSH training monitor.
-    #[clap(long)]
-    ssh_monitor_port: Option<u16>,
-
-    /// Optional OpenSSH private key path for the SSH training monitor host key.
-    #[clap(long)]
-    ssh_monitor_host_key: Option<PathBuf>,
 
     /// An auth header string for an opentelemetry endpoint. Used for both logging and metrics.
     #[clap(long, env)]
@@ -238,8 +229,6 @@ async fn main() -> Result<()> {
                         run_args.init_warmup_time,
                         run_args.withdraw_on_disconnect,
                         Some(run_args.web_port),
-                        run_args.ssh_monitor_port,
-                        run_args.ssh_monitor_host_key,
                     )
                     .await?
                     .run()

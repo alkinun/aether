@@ -51,9 +51,7 @@ ENV LIBTORCH_USE_PYTORCH=1 \
     TRAINING_RUN_CONFIG=config/training-run.toml \
     CONTROL_PORT=8080 \
     SERVER_PORT=39405 \
-    WEB_PORT=8081 \
-    SSH_MONITOR_PORT=2222 \
-    SSH_MONITOR_HOST_KEY=/app/.aether-control/ssh_monitor_ed25519
+    WEB_PORT=8081
 
 RUN apt-get update \
     && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
@@ -71,6 +69,6 @@ COPY scripts ./scripts
 
 VOLUME ["/app/data", "/app/.aether-control"]
 
-EXPOSE 39405 8080 8081 2222
+EXPOSE 39405 8080 8081
 
 CMD ["/bin/sh", "-c", "export LD_LIBRARY_PATH=$(python3 -c \"import os, torch; print(os.path.join(os.path.dirname(torch.__file__), 'lib'))\"):${LD_LIBRARY_PATH}; exec python3 scripts/training-control-dashboard.py"]

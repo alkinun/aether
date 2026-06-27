@@ -35,7 +35,6 @@ use tracing::{debug, info, info_span, warn, Instrument};
 use wandb::LogData;
 
 use crate::dashboard::{DashboardState, DashboardTui};
-use crate::ssh_monitor;
 use crate::web::{self, LossPoint, WandbInfo, WebState};
 
 /// Upper bound on the number of samples retained in `loss_history`. When this
@@ -203,8 +202,6 @@ impl App {
         init_warmup_time: Option<u64>,
         withdraw_on_disconnect: bool,
         web_port: Option<u16>,
-        ssh_monitor_port: Option<u16>,
-        ssh_monitor_host_key: Option<PathBuf>,
     ) -> Result<Self> {
         async {
             Self::reset_ephemeral(&mut coordinator);
@@ -321,20 +318,6 @@ impl App {
                 web_port,
                 cancel.clone(),
             );
-
-            if let Some(ssh_monitor_port) = ssh_monitor_port {
-                let ssh_monitor_host_key = ssh_monitor_host_key.or_else(|| {
-                    save_state_dir
-                        .as_ref()
-                        .map(|dir| dir.join("ssh_monitor_ed25519"))
-                });
-                ssh_monitor::start(
-                    web_state.clone(),
-                    ssh_monitor_port,
-                    ssh_monitor_host_key,
-                    cancel.clone(),
-                );
-            }
 
             if let Some(init_warmup_time) = init_warmup_time {
                 coordinator.config.warmup_time = init_warmup_time;

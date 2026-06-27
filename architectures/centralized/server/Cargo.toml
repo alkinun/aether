@@ -16,7 +16,6 @@ async-trait.workspace = true
 tokio.workspace = true
 tokio-stream.workspace = true
 tokio-util.workspace = true
-russh = "0.52.1"
 axum.workspace = true
 tower-http.workspace = true
 serde_json.workspace = true

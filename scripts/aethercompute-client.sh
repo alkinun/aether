@@ -10,10 +10,10 @@
 # it when you're ready.
 #
 # Usage:
-#   curl -fsSL https://aethercompute.org/client.sh | sh          # install + launch
-#   curl -fsSL https://aethercompute.org/client.sh | sh update   # pull latest source
-#   curl -fsSL https://aethercompute.org/client.sh | sh doctor   # env check
-#   curl -fsSL https://aethercompute.org/client.sh | sh uninstall
+#   curl -fsSL https://aethercompute.org/client.sh | sh            # install + launch
+#   curl -fsSL https://aethercompute.org/client.sh | sh -s update  # pull latest source
+#   curl -fsSL https://aethercompute.org/client.sh | sh -s doctor  # env check
+#   curl -fsSL https://aethercompute.org/client.sh | sh -s uninstall
 #
 # This script targets bash. When piped to a POSIX `sh` (e.g. dash on Debian),
 # the bootstrap below re-fetches it and runs it under bash automatically.
@@ -300,10 +300,10 @@ and hands the terminal over to it. The TUI performs onboarding, compiles the
 real training client with live progress, and execs it when you're ready.
 
 Usage:
-  curl -fsSL https://aethercompute.org/client.sh | sh         install + launch
-  curl -fsSL https://aethercompute.org/client.sh | sh update  pull latest source
-  curl -fsSL https://aethercompute.org/client.sh | sh doctor  show what's installed
-  curl -fsSL https://aethercompute.org/client.sh | sh uninstall
+  curl -fsSL https://aethercompute.org/client.sh | sh           install + launch
+  curl -fsSL https://aethercompute.org/client.sh | sh -s update pull latest source
+  curl -fsSL https://aethercompute.org/client.sh | sh -s doctor show what's installed
+  curl -fsSL https://aethercompute.org/client.sh | sh -s uninstall
 
 Subcommands:
   (none)    ensure prerequisites, build, and launch the volunteer TUI

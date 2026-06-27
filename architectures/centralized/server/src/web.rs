@@ -55,7 +55,6 @@ pub fn start(
         .route("/partials/timing", get(timing_partial))
         .route("/partials/loss", get(loss_partial))
         .route("/partials/throughput", get(throughput_partial))
-        .route("/partials/stepper", get(stepper_partial))
         .route("/api/state", get(api_state))
         .with_state(shared.clone());
 
@@ -620,19 +619,12 @@ fn render_loss_svg(losses: &[LossPoint]) -> String {
     let loss_range = (max_loss - min_loss).max(0.01) as f64;
 
     let mut points: Vec<String> = Vec::with_capacity(n);
-    let mut coords: Vec<(f64, f64)> = Vec::with_capacity(n);
     for i in 0..n {
         let x = plot_x0 + (steps[i] as f64 - min_step) / step_range * plot_w;
         let y = plot_y1 - (vals[i] as f64 - min_loss as f64) / loss_range * plot_h;
         points.push(format!("{:.1},{:.1}", x, y));
-        coords.push((x, y));
     }
     let points_str = points.join(" ");
-    let area_str = {
-        let fx = coords.first().map(|c| c.0).unwrap_or(plot_x0);
-        let lx = coords.last().map(|c| c.0).unwrap_or(plot_x1);
-        format!("{fx:.1},{plot_y1:.1} {points_str} {lx:.1},{plot_y1:.1}")
-    };
 
     let y_ticks = 5;
     let mut y_labels = String::new();
@@ -640,7 +632,7 @@ fn render_loss_svg(losses: &[LossPoint]) -> String {
         let val = min_loss as f64 + (max_loss - min_loss) as f64 * (i as f64 / y_ticks as f64);
         let y = plot_y1 - (i as f64 / y_ticks as f64) * plot_h;
         y_labels.push_str(&format!(
-            r##"<text x="{}" y="{}" text-anchor="end" fill="#746268">{:.4}</text>"##,
+            r##"<text x="{}" y="{}" text-anchor="end" fill="#e2ccb8">{:.4}</text>"##,
             pad_left - 5.0,
             y + 4.0,
             val,
@@ -653,7 +645,7 @@ fn render_loss_svg(losses: &[LossPoint]) -> String {
         let val = min_step + (max_step - min_step) * (i as f64 / x_ticks as f64);
         let x = plot_x0 + (i as f64 / x_ticks as f64) * plot_w;
         x_labels.push_str(&format!(
-            r##"<text x="{x}" y="{}" text-anchor="middle" fill="#746268">{:.0}</text>"##,
+            r##"<text x="{x}" y="{}" text-anchor="middle" fill="#e2ccb8">{:.0}</text>"##,
             height - 8.0,
             val,
         ));
@@ -667,22 +659,10 @@ fn render_loss_svg(losses: &[LossPoint]) -> String {
 <b>Latest Loss:</b> {last_loss:.4} &nbsp; <b>Min:</b> {min_loss:.4} &nbsp; <b>Max:</b> {max_loss:.4} &nbsp; <b>Avg:</b> {avg_loss:.4} &nbsp; Steps: {min_step:.0} - {max_step:.0} &nbsp; Points: {n}
 <br><br>
 <svg width="{width}" height="{height}" viewBox="0 0 {width} {height}" xmlns="http://www.w3.org/2000/svg" class="chart-svg">
-<defs>
-<linearGradient id="lossLine" x1="0" y1="0" x2="1" y2="0">
-<stop offset="0%" stop-color="#52b8cd"/>
-<stop offset="55%" stop-color="#a85cbc"/>
-<stop offset="100%" stop-color="#da4e8a"/>
-</linearGradient>
-<linearGradient id="lossArea" x1="0" y1="0" x2="0" y2="1">
-<stop offset="0%" stop-color="#da4e8a" stop-opacity="0.22"/>
-<stop offset="100%" stop-color="#da4e8a" stop-opacity="0"/>
-</linearGradient>
-</defs>
 <rect x="{plot_x0}" y="{plot_y0}" width="{plot_w}" height="{plot_h}" fill="none" stroke="#463840"/>
 {y_labels}
 {x_labels}
-<polygon points="{area_str}" fill="url(#lossArea)"/>
-<polyline points="{points_str}" fill="none" stroke="url(#lossLine)" stroke-width="1.6" stroke-linejoin="round"/>
+<polyline points="{points_str}" fill="none" stroke="#e2ccb8"/>
 </svg>
 </div>"##,
         last_loss = last_loss,
@@ -742,19 +722,12 @@ fn render_throughput_svg(losses: &[LossPoint]) -> String {
     let tps_range = (max_tps - min_tps).max(1.0) as f64;
 
     let mut points: Vec<String> = Vec::with_capacity(n);
-    let mut coords: Vec<(f64, f64)> = Vec::with_capacity(n);
     for i in 0..n {
         let x = plot_x0 + (steps[i] as f64 - min_step) / step_range * plot_w;
         let y = plot_y1 - (vals[i] as f64 - min_tps as f64) / tps_range * plot_h;
         points.push(format!("{:.1},{:.1}", x, y));
-        coords.push((x, y));
     }
     let points_str = points.join(" ");
-    let area_str = {
-        let fx = coords.first().map(|c| c.0).unwrap_or(plot_x0);
-        let lx = coords.last().map(|c| c.0).unwrap_or(plot_x1);
-        format!("{fx:.1},{plot_y1:.1} {points_str} {lx:.1},{plot_y1:.1}")
-    };
 
     let y_ticks = 4;
     let mut y_labels = String::new();
@@ -762,7 +735,7 @@ fn render_throughput_svg(losses: &[LossPoint]) -> String {
         let val = min_tps as f64 + (max_tps - min_tps) as f64 * (i as f64 / y_ticks as f64);
         let y = plot_y1 - (i as f64 / y_ticks as f64) * plot_h;
         y_labels.push_str(&format!(
-            r##"<text x="{}" y="{}" text-anchor="end" fill="#746268">{:.0}</text>"##,
+            r##"<text x="{}" y="{}" text-anchor="end" fill="#e2ccb8">{:.0}</text>"##,
             pad_left - 5.0,
             y + 4.0,
             val,
@@ -775,7 +748,7 @@ fn render_throughput_svg(losses: &[LossPoint]) -> String {
         let val = min_step + (max_step - min_step) * (i as f64 / x_ticks as f64);
         let x = plot_x0 + (i as f64 / x_ticks as f64) * plot_w;
         x_labels.push_str(&format!(
-            r##"<text x="{x}" y="{}" text-anchor="middle" fill="#746268">{:.0}</text>"##,
+            r##"<text x="{x}" y="{}" text-anchor="middle" fill="#e2ccb8">{:.0}</text>"##,
             height - 8.0,
             val,
         ));
@@ -789,17 +762,10 @@ fn render_throughput_svg(losses: &[LossPoint]) -> String {
 <b>Latest Tokens/s:</b> {last_tps:.1} &nbsp; <b>Avg:</b> {avg_tps:.1} &nbsp; <b>Peak:</b> {max_tps:.1} &nbsp; Steps: {min_step:.0} - {max_step:.0} &nbsp; Points: {n}
 <br><br>
 <svg width="{width}" height="{height}" viewBox="0 0 {width} {height}" xmlns="http://www.w3.org/2000/svg" class="chart-svg">
-<defs>
-<linearGradient id="tpsArea" x1="0" y1="0" x2="0" y2="1">
-<stop offset="0%" stop-color="#52b8cd" stop-opacity="0.26"/>
-<stop offset="100%" stop-color="#52b8cd" stop-opacity="0"/>
-</linearGradient>
-</defs>
 <rect x="{plot_x0}" y="{plot_y0}" width="{plot_w}" height="{plot_h}" fill="none" stroke="#463840"/>
 {y_labels}
 {x_labels}
-<polygon points="{area_str}" fill="url(#tpsArea)"/>
-<polyline points="{points_str}" fill="none" stroke="#52b8cd" stroke-width="1.6" stroke-linejoin="round"/>
+<polyline points="{points_str}" fill="none" stroke="#52b8cd"/>
 </svg>
 </div>"##,
         last_tps = last_tps,
@@ -830,97 +796,6 @@ async fn throughput_partial(State(state): State<SharedState>) -> Html<String> {
     let s = state.lock().unwrap();
     let svg = render_throughput_svg(&s.loss_history);
     Html(svg)
-}
-
-/// Maps a `RunState` to one of the 5 lifecycle phases the stepper tracks,
-/// mirroring the launcher's "Step X/5" indicator. Returns 0 for `Paused`.
-fn phase_index(state: RunState) -> usize {
-    match state {
-        RunState::Uninitialized | RunState::WaitingForMembers => 1,
-        RunState::Warmup => 2,
-        RunState::RoundTrain => 3,
-        RunState::RoundWitness => 4,
-        RunState::Cooldown | RunState::Finished => 5,
-        RunState::Paused => 0,
-    }
-}
-
-async fn stepper_partial(State(state): State<SharedState>) -> Html<String> {
-    let s = state.lock().unwrap();
-    match &s.coordinator {
-        Some(coord) => {
-            let current = coord.run_state;
-            let idx = phase_index(current);
-            let paused = matches!(current, RunState::Paused);
-            let finished = matches!(current, RunState::Finished);
-
-            // 5-phase view echoing the volunteer launcher's "X/5" indicator.
-            let phases: [(&str, usize); 5] = [
-                ("Gather", 1),
-                ("Warmup", 2),
-                ("Train", 3),
-                ("Witness", 4),
-                ("Finish", 5),
-            ];
-            let mut pills = String::new();
-            for (i, (label, p)) in phases.iter().enumerate() {
-                let cls = if !paused && idx == *p {
-                    "pill active"
-                } else if finished {
-                    "pill done"
-                } else {
-                    "pill"
-                };
-                if i > 0 {
-                    pills.push_str("<span class=\"sep\"></span>");
-                }
-                pills.push_str(&format!(
-                    r#"<span class="{cls}"><span class="pn">{n}</span>{label}</span>"#,
-                    n = p
-                ));
-            }
-
-            let step = coord.progress.step;
-            let total = coord.config.total_steps;
-            let pct = if total > 0 {
-                ((step as f64 / total as f64) * 100.0).clamp(0.0, 100.0)
-            } else {
-                0.0
-            };
-
-            let phase_label = if paused {
-                "Paused".to_string()
-            } else if idx > 0 {
-                format!("Phase {}/5 · {}", idx, format_run_state(current))
-            } else {
-                format_run_state(current).to_string()
-            };
-
-            let badge = if paused {
-                r#"<span class="badge warn">⏸ PAUSED</span>"#
-            } else if finished {
-                r#"<span class="badge ok">✓ FINISHED</span>"#
-            } else if coord.pending_pause.is_true() {
-                r#"<span class="badge warn">⚠ PAUSE PENDING</span>"#
-            } else {
-                ""
-            };
-
-            Html(format!(
-                r#"<div class="stepper">{pills}</div>
-<div class="phase-meta">
-  <span>{phase_label}</span>
-  <span class="dot-sep"></span>
-  <span>Step {step} / {total}</span>
-  {badge}
-</div>
-<div class="stepbar"><div class="stepbar-fill" style="width:{pct:.1}%"></div></div>"#,
-            ))
-        }
-        None => Html(
-            r#"<div class="stepper"><span class="pill"><span class="pn">·</span>awaiting coordinator</span></div>"#.into(),
-        ),
-    }
 }
 
 async fn api_state(State(state): State<SharedState>) -> impl axum::response::IntoResponse {
@@ -979,168 +854,34 @@ fn format_data_type(dt: &LLMTrainingDataType) -> &'static str {
 }
 
 const INDEX_HTML: &str = r##"<!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>◆ AETHERCOMPUTE — Training Monitor</title>
+<title>Aether Training Monitor</title>
 <script src="https://unpkg.com/htmx.org@2.0.4"></script>
 <style>
-:root {
-  /* Burnt-neon brand palette — mirrors the aether-volunteer launcher. */
-  --rose:   #da4e8a;  /* burnt rose   — primary / danger */
-  --cyan:   #52b8cd;  /* smoked cyan  — secondary / healthy */
-  --amber:  #e28844;  /* ember amber  — warn / syncing */
-  --violet: #a85cbc;  /* ash violet   — withdrawn */
-  --bone:   #e2ccb8;  /* warm bloom   — body ink */
-  --ink:    #f5ead9;  /* brightest text */
-  --ember:  #483838;
-  --dim:    #746268;  /* labels / hints */
-  --panel:    #141216;
-  --panel-2:  #1b171c;
-  --panel-hi: #463840;
-  --grad: linear-gradient(90deg, var(--cyan), var(--violet) 55%, var(--rose));
-}
-* { box-sizing: border-box; }
-html, body { margin: 0; }
-body {
-  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
-  background: var(--panel);
-  color: var(--bone);
-  font-size: 13px;
-  line-height: 1.45;
-  min-height: 100vh;
-  position: relative;
-}
-body::before {
-  content: "";
-  position: fixed; inset: 0; pointer-events: none; z-index: 0;
-  background:
-    radial-gradient(1100px 480px at 82% -10%, rgba(218,78,138,.10), transparent 60%),
-    radial-gradient(900px 460px at 10% 4%, rgba(82,184,205,.08), transparent 62%);
-}
-.wrap { max-width: 1240px; margin: 0 auto; padding: 0 1.1rem 2.4rem; position: relative; z-index: 1; }
-
-/* ---- sticky topbar ---- */
-.topbar { position: sticky; top: 0; z-index: 30; background: rgba(20,18,22,.82);
-  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
-  border-bottom: 1px solid var(--panel-hi); }
-.topbar::after { content: ""; display: block; height: 2px; background: var(--grad); opacity: .55; }
-.topbar-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; padding: .55rem 0; }
-.brand { display: flex; align-items: center; gap: .85rem; }
-.wordmark { font-size: 15px; font-weight: 700; letter-spacing: .06em; display: inline-flex; align-items: center; gap: .42rem; }
-.diamond { color: var(--rose); text-shadow: 0 0 10px rgba(218,78,138,.55); }
-.wm-text { background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
-.live { display: inline-flex; align-items: center; gap: .4rem; color: var(--cyan);
-  font-size: 11px; letter-spacing: .18em; padding-left: .85rem; border-left: 1px solid var(--panel-hi); }
-.live .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--cyan);
-  box-shadow: 0 0 9px var(--cyan); animation: pulse 1.8s ease-in-out infinite; }
-@keyframes pulse { 0%,100% { opacity: 1; transform: scale(1); } 50% { opacity: .3; transform: scale(.6); } }
-.hint { color: var(--dim); font-size: 11px; letter-spacing: .02em; }
-
-/* ---- hero with glitch logo watermark + stepper ---- */
-.hero { position: relative; overflow: hidden; border-bottom: 1px solid var(--panel-hi);
-  padding: 1.5rem 0 1.35rem; margin-bottom: 1.2rem; }
-.logo-watermark { position: absolute; left: 50%; top: 52%; transform: translate(-50%,-50%);
-  margin: 0; font-size: 9px; line-height: 1; letter-spacing: 0; color: var(--bone);
-  opacity: .055; pointer-events: none; user-select: none; white-space: pre; }
-.hero .wrap { padding: 0 1.1rem; }
-.stepper { display: flex; align-items: center; gap: .42rem; flex-wrap: wrap; justify-content: center; position: relative; z-index: 1; }
-.pill { padding: .3rem .78rem; border: 1px solid var(--panel-hi); border-radius: 999px;
-  color: var(--dim); font-size: 11px; letter-spacing: .05em; background: rgba(27,23,28,.7);
-  display: inline-flex; align-items: center; gap: .4rem; transition: .25s; }
-.pill .pn { font-size: 10px; opacity: .8; }
-.pill.active { color: var(--ink); background: var(--rose); border-color: var(--rose);
-  font-weight: 700; box-shadow: 0 0 16px rgba(218,78,138,.5); }
-.pill.active .pn { opacity: 1; }
-.pill.done { color: var(--cyan); border-color: rgba(82,184,205,.45); background: rgba(82,184,205,.08); }
-.sep { width: 16px; height: 1px; background: var(--panel-hi); }
-.phase-meta { display: flex; align-items: center; justify-content: center; gap: .75rem;
-  margin-top: .8rem; color: var(--dim); font-size: 12px; position: relative; z-index: 1; flex-wrap: wrap; }
-.phase-meta span { white-space: nowrap; }
-.dot-sep { width: 3px; height: 3px; border-radius: 50%; background: var(--panel-hi); display: inline-block; }
-.badge { font-size: 10px; letter-spacing: .14em; padding: .12rem .5rem; border-radius: 4px; font-weight: 700; }
-.badge.warn { color: var(--amber); border: 1px solid rgba(226,136,68,.5); }
-.badge.ok { color: var(--cyan); border: 1px solid rgba(82,184,205,.5); }
-.stepbar { margin: .85rem auto 0; max-width: 720px; height: 7px; border-radius: 5px;
-  background: var(--panel-2); border: 1px solid var(--panel-hi); overflow: hidden; position: relative; z-index: 1; }
-.stepbar-fill { height: 100%; background: var(--grad);
-  box-shadow: 0 0 12px rgba(168,92,188,.45); transition: width .4s ease; }
-
-/* ---- panels ---- */
-.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr));
-  gap: 1.1rem 1.25rem; margin-top: 1.1rem; align-items: start; }
-.grid + .grid { margin-top: 1.25rem; }
-.panel { background: linear-gradient(180deg, var(--panel-2), rgba(27,23,28,.6));
-  border: 1px solid var(--panel-hi); border-radius: 11px; padding: .85rem 1rem 1.05rem;
-  overflow-x: auto; box-shadow: inset 0 1px 0 rgba(245,234,217,.03); }
-.span2 { grid-column: 1 / -1; }
-h2 { color: var(--bone); border-bottom: 1px solid var(--panel-hi); padding-bottom: .5rem;
-  font-size: 12px; letter-spacing: .06em; text-transform: uppercase; margin: 0 0 .7rem;
-  display: flex; align-items: center; gap: .5rem; }
-h2::before { content: "◆"; color: var(--rose); font-size: 9px; text-shadow: 0 0 8px rgba(218,78,138,.5); }
-
-/* ---- tables ---- */
+body { font-family: monospace; margin: 0; background: #141216; color: #e2ccb8; font-size: 13px; }
+.wrap { max-width: 1200px; margin: 0 auto; padding: 0 1rem 1.5rem; }
+.topbar { position: sticky; top: 0; z-index: 10; background: #141216; border-bottom: 1px solid #463840; padding: .55rem 0; }
+.topbar .wrap { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+.topbar h1 { font-size: 15px; margin: 0; }
+.hint { color: #746268; font-size: 12px; }
+h1 { color: #f5ead9; }
+h2 { color: #e2ccb8; border-bottom: 1px solid #463840; padding-bottom: 4px; font-size: 14px; margin: 0 0 .5rem; }
 table { border-collapse: collapse; }
-caption { color: var(--dim); font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
-  padding-bottom: .3rem; text-align: left; }
-td, th { padding: 3px 9px; text-align: left; border: 1px solid var(--panel-hi); font-size: 12px; }
-th { color: var(--dim); background: rgba(70,56,64,.22); font-weight: 600; letter-spacing: .04em; }
-b { color: var(--ink); font-weight: 700; }
-a { color: var(--cyan); }
-small { color: var(--dim); }
-
-/* ---- charts ---- */
-.chart-svg { display: block; width: 100%; height: auto; }
-.chart-svg text { fill: var(--dim); font-size: 11px; }
-
-footer { margin-top: 2.4rem; padding-top: 1rem; border-top: 1px solid var(--panel-hi);
-  display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; color: var(--dim); font-size: 11px; }
-footer a { text-decoration: none; }
+td, th { padding: 3px 8px; text-align: left; border: 1px solid #463840; font-size: 12px; }
+b { color: #f5ead9; }
+a { color: #52b8cd; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1rem 1.25rem; margin-top: 1rem; align-items: start; }
+svg { display: block; width: 100%; height: auto; }
+.chart-svg text { fill: #e2ccb8; font-size: 11px; }
+.panel { overflow-x: auto; }
 </style>
 </head>
 <body>
-<header class="topbar">
-  <div class="wrap topbar-row">
-    <div class="brand">
-      <span class="wordmark"><span class="diamond">◆</span><span class="wm-text">AETHERCOMPUTE</span></span>
-      <span class="live"><span class="dot"></span>LIVE</span>
-    </div>
-    <span class="hint">training monitor · auto-refresh 2&ndash;5s</span>
-  </div>
-</header>
-
-<section class="hero">
-<pre class="logo-watermark">AETHERCOMPUTEAETHERCOMPUTEAETHERCOMPUTEAETHERCOMPUTEAETHERCOMPUTEAETHERC
-E:cccclllllllloooooooooodddddddddddodddddddddddddddddddddddddddddddooooO
-TcclllllllllllloooooooooddddddoooooooodddddddddddddddddddddddddddddooooM
-HllllllllllllllloooooolclllllllcllccllllllllllooooddddooddddddddddoooooP
-Ellllllllllllllllllccc:::clllllllc;:looooolccllllllllcloooddddddddoooooU
-Rccclllllllllcc:::ccccc:;cllllccc;':llloolc:clolllc:;:lllloooooodooooooT
-Ccccccccccccc:;;;:cccc:;'';:::;,'..;::::;,,;:ccc:,',:clllllllloolloooooE
-Occccccccc::;;:;,'';;;;'....'.... .''''...',;,'...';ccllllllllcccclllllA
-Mccccc:::;;;;;;;,........          ..     ...  ..,;::::::::::::ccllllllE
-Pc::::;,,,,,,''....            ..               ........'''',:cclllccccT
-U::::;,'''.................   .,,...........','...     ...',;::c:::::ccH
-T::;;,,''....',;:;........     .. .........,colc:,...    .......'',,;;;E
-E::;,,,'',,;:cllol:.......         ...'''',codddolc:,'...      ......',R
-A:;,'',,;;:cclooool:,......... ......''',;lddxdddoolc:,'..........',;;:C
-E,,',,,,;;;::ccllloll:,...............',:odddddoolcc:;,'.'''..',;;::cccO
-T''',,,,,,,,,,;;::::cc:;,'....'....'',:clooolllc:;,''''''',;;;;;:clllllM
-H,;;:::cc::;;;;;,,'.',,,,;;;;;,,;;;;;::::;:::;;,'...'',;::cclllllllllllP
-E:::::cccccccc:;,''''...,::;,...,;,...,,'...'',,,',,;:cccllllloooooooooU
-R::::::::::ccc:;,;:;'';;:lc;,..',;:,'..;:;,,;,,:ccccccloolcccllllloooooT
-C::ccc:::::::::::c:;;::::llc:,';:cccc:,:llccllc:clllcccllllllllllllooooE
-Occcccccccc::::::::::cc::ccc:;;::ccccc::clllcclc::cccccccllllllllooooooA
-Mllllccccccccccccc::ccccccccc::::ccccc:::cccccccc::ccccccllllloooooooooE
-Plllllllcccccccccccccccccccccc:cc:::::::::::::::cccccccllllooooooooooodT
-UoollllllllllllllcccccclllcccccccccccccccccccccccllllllloooooooodddddddH
-TEAETHERCOMPUTEAETHERCOMPUTEAETHERCOMPUTEAETHERCOMPUTEAETHERCOMPUTEAETHE</pre>
-  <div class="wrap" hx-get="/partials/stepper" hx-trigger="every 2s" hx-swap="innerHTML">
-    <div class="stepper"><span class="pill"><span class="pn">·</span>loading&hellip;</span></div>
-  </div>
-</section>
-
+<header class="topbar"><div class="wrap">
+  <h1>Aether Training Monitor</h1>
+  <span class="hint">live &middot; auto-refresh 2&ndash;5s</span>
+</div></header>
 <div class="wrap">
 <div class="grid">
   <div class="panel">
@@ -1171,19 +912,15 @@ TEAETHERCOMPUTEAETHERCOMPUTEAETHERCOMPUTEAETHERCOMPUTEAETHERCOMPUTEAETHE</pre>
   </div>
 </div>
 <div class="grid">
-  <div class="panel span2">
+  <div class="panel">
     <h2>Loss</h2>
     <div hx-get="/partials/loss" hx-trigger="every 5s" hx-swap="innerHTML"><i>Loading...</i></div>
   </div>
-  <div class="panel span2">
+  <div class="panel">
     <h2>Throughput (Tokens/sec)</h2>
     <div hx-get="/partials/throughput" hx-trigger="every 5s" hx-swap="innerHTML"><i>Loading...</i></div>
   </div>
 </div>
-<footer>
-  <span class="hint">◆ aethercompute — decentralized training</span>
-  <a class="hint" href="/api/state" style="color:var(--cyan)">/api/state</a>
-</footer>
 </div>
 </body>
 </html>"##;

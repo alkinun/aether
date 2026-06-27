@@ -66,6 +66,8 @@ def update_config_from_form(form: dict[str, list[str]]) -> None:
             "state_path": str,
             "server_port": int_value,
             "live_web_port": int_value,
+            "ssh_monitor_port": int_value,
+            "ssh_monitor_host_key": str,
             "tui": bool_value,
         },
         "dataset": {
@@ -327,6 +329,12 @@ def server_command(config: dict) -> list[str]:
         "--web-port",
         str(server["live_web_port"]),
     ]
+    ssh_monitor_port = server.get("ssh_monitor_port") or os.environ.get("SSH_MONITOR_PORT")
+    if ssh_monitor_port:
+        command.extend(["--ssh-monitor-port", str(ssh_monitor_port)])
+        ssh_monitor_host_key = server.get("ssh_monitor_host_key") or os.environ.get("SSH_MONITOR_HOST_KEY")
+        if ssh_monitor_host_key:
+            command.extend(["--ssh-monitor-host-key", str(ssh_monitor_host_key)])
     if not server.get("tui", False):
         command.extend(["--tui=false"])
     return command
@@ -424,6 +432,7 @@ def html_page(message: str | None = None) -> str:
       <p>State checkpoint: <code>{html.escape(checkpoint)}</code></p>
       <p>Training server: {render_job_status(server, live=True)}</p>
       <p>Live dashboard: <a href="http://{html.escape(os.environ.get('PUBLIC_HOST', 'localhost'))}:{config['server']['live_web_port']}/">port {config['server']['live_web_port']}</a></p>
+      <p>SSH monitor: <code>ssh -tt -p {html.escape(str(config['server'].get('ssh_monitor_port', os.environ.get('SSH_MONITOR_PORT', 2222))))} monitor@{html.escape(os.environ.get('PUBLIC_HOST', 'localhost'))}</code></p>
     </section>
     <section data-panel="config" hidden>
       <form method="post" action="/save">

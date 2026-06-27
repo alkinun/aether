@@ -1,0 +1,13 @@
+[package]
+name = "psyche-centralized-volunteer"
+version.workspace = true
+edition = "2021"
+
+[[bin]]
+name = "aether-volunteer"
+path = "src/main.rs"
+
+[dependencies]
+ratatui.workspace = true
+crossterm = "0.28.1"
+anyhow.workspace = true

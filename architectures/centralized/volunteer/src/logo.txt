@@ -1,4 +1,3 @@
-```
 AETHERCOMPUTEAETHERCOMPUTEAETHERCOMPUTEAETHERCOMPUTEAETHERCOMPUTEAETHERC
 E:cccclllllllloooooooooodddddddddddodddddddddddddddddddddddddddddddooooO
 TcclllllllllllloooooooooddddddoooooooodddddddddddddddddddddddddddddooooM
@@ -24,6 +23,3 @@ Mllllccccccccccccc::ccccccccc::::ccccc:::cccccccc::ccccccllllloooooooooE
 Plllllllcccccccccccccccccccccc:cc:::::::::::::::cccccccllllooooooooooodT
 UoollllllllllllllcccccclllcccccccccccccccccccccccllllllloooooooodddddddH
 TEAETHERCOMPUTEAETHERCOMPUTEAETHERCOMPUTEAETHERCOMPUTEAETHERCOMPUTEAETHE
-
-aethercompute.org
-```

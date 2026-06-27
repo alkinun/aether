@@ -2,6 +2,8 @@
 state_path = "config/deepseek-v3-dense-250m-ufw/state.toml"
 server_port = 39405
 live_web_port = 8081
+ssh_monitor_port = 2222
+ssh_monitor_host_key = ".aether-control/ssh_monitor_ed25519"
 tui = false
 
 [dataset]

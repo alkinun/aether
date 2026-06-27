@@ -16,6 +16,7 @@ async-trait.workspace = true
 tokio.workspace = true
 tokio-stream.workspace = true
 tokio-util.workspace = true
+russh = "0.52.1"
 axum.workspace = true
 tower-http.workspace = true
 serde_json.workspace = true
@@ -24,6 +25,7 @@ serde.workspace = true
 tracing.workspace = true
 bytes.workspace = true
 rand.workspace = true
+rand08 = { package = "rand", version = "0.8.5" }
 sha2.workspace = true
 futures-util.workspace = true
 chrono.workspace = true

@@ -28,7 +28,7 @@ pub struct WebState {
     pub server_addr: String,
 }
 
-type SharedState = Arc<Mutex<WebState>>;
+pub(crate) type SharedState = Arc<Mutex<WebState>>;
 
 pub fn start(
     state: WebState,

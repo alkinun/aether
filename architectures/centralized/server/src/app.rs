@@ -35,6 +35,7 @@ use tracing::{debug, info, info_span, warn, Instrument};
 use wandb::LogData;
 
 use crate::dashboard::{DashboardState, DashboardTui};
+use crate::ssh_monitor;
 use crate::web::{self, LossPoint, WebState};
 
 /// Upper bound on the number of samples retained in `loss_history`. When this
@@ -201,6 +202,8 @@ impl App {
         init_warmup_time: Option<u64>,
         withdraw_on_disconnect: bool,
         web_port: Option<u16>,
+        ssh_monitor_port: Option<u16>,
+        ssh_monitor_host_key: Option<PathBuf>,
     ) -> Result<Self> {
         async {
             Self::reset_ephemeral(&mut coordinator);
@@ -316,6 +319,20 @@ impl App {
                 web_port,
                 cancel.clone(),
             );
+
+            if let Some(ssh_monitor_port) = ssh_monitor_port {
+                let ssh_monitor_host_key = ssh_monitor_host_key.or_else(|| {
+                    save_state_dir
+                        .as_ref()
+                        .map(|dir| dir.join("ssh_monitor_ed25519"))
+                });
+                ssh_monitor::start(
+                    web_state.clone(),
+                    ssh_monitor_port,
+                    ssh_monitor_host_key,
+                    cancel.clone(),
+                );
+            }
 
             if let Some(init_warmup_time) = init_warmup_time {
                 coordinator.config.warmup_time = init_warmup_time;
@@ -488,9 +505,12 @@ impl App {
         log.insert("_step", point.step);
         log.insert("train/loss", point.loss);
         log.insert("train/perplexity", point.loss.exp());
-        log.insert("train/lr", match &self.coordinator.model {
-            Model::LLM(llm) => llm.lr_schedule.get_lr(point.step),
-        });
+        log.insert(
+            "train/lr",
+            match &self.coordinator.model {
+                Model::LLM(llm) => llm.lr_schedule.get_lr(point.step),
+            },
+        );
         log.insert("train/tokens_per_sec", point.tokens_per_sec);
         tokio::spawn(async move {
             run.log(log).await;
@@ -796,8 +816,12 @@ impl From<&App> for DashboardState {
 async fn init_wandb(run_id: &str) -> Option<Arc<wandb::Run>> {
     let api_key = std::env::var("WANDB_API_KEY").ok()?;
     let project = std::env::var("WANDB_PROJECT").unwrap_or_else(|_| "aethercompute".to_string());
-    let run_name = std::env::var("WANDB_RUN")
-        .unwrap_or_else(|_| format!("server-{run_id}-{}", chrono::Utc::now().format("%Y-%m-%d_%H-%M-%S")));
+    let run_name = std::env::var("WANDB_RUN").unwrap_or_else(|_| {
+        format!(
+            "server-{run_id}-{}",
+            chrono::Utc::now().format("%Y-%m-%d_%H-%M-%S")
+        )
+    });
     let entity = std::env::var("WANDB_ENTITY").ok();
     let group = std::env::var("WANDB_GROUP").ok();
 

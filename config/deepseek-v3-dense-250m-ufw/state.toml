@@ -41,7 +41,7 @@ cold_start_warmup_steps = 0
 Server = "46.224.237.28:39406"
 
 [model.LLM.checkpoint.Hub]
-repo_id = "AtAndDev/deepseek-v3-dense-250m-1b"
+repo_id = "aethercompute/deepseek-v3-dense-250m-1b"
 
 [model.LLM.lr_schedule.Cosine]
 base_lr = 3.0e-4

@@ -254,24 +254,27 @@ impl StatsLogger {
     }
 
     pub fn global_tokens_per_second(&self, state: &Coordinator) -> f32 {
-        match self.step_durations.is_empty() {
-            true => 0.,
-            false => match &state.model {
-                model::Model::LLM(_) => {
-                    let tokens = state.get_target_global_batch_size(state.current_round()) as u32
-                        * state.get_sequence_length()
-                        * self.step_durations.len() as u32;
-                    let seconds = self
-                        .step_durations
-                        .iter()
-                        .fold(0f32, |acc, ele| acc + ele.as_secs_f32());
-                    if seconds == 0.0 {
-                        0.0
-                    } else {
-                        tokens as f32 / seconds
-                    }
+        if self.step_durations.is_empty() {
+            return 0.;
+        }
+
+        match &state.model {
+            model::Model::LLM(_) => {
+                let tokens = state.get_target_global_batch_size(state.current_round()) as u64
+                    * state.get_sequence_length() as u64
+                    * self.step_durations.len() as u64;
+                
+                let seconds = self
+                    .step_durations
+                    .iter()
+                    .fold(0f64, |acc, ele| acc + ele.as_secs_f64());
+                
+                if seconds == 0.0 {
+                    0.0
+                } else {
+                    (tokens as f64 / seconds) as f32
                 }
-            },
+            }
         }
     }
 

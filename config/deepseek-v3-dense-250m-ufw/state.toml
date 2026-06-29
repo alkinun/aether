@@ -1,4 +1,4 @@
-run_id = "deepseek-v3-dense-250m-1b"
+run_id = "deepseek-v3-dense-250m-1b-exp1"
 run_state = "WaitingForMembers"
 
 [config]

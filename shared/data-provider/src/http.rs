@@ -356,7 +356,7 @@ impl HttpDataProvider {
 
                 futures.push(future);
             }
-            let finished = join_all(futures.into_iter()).await;
+            let finished = join_all(futures).await;
 
             let mut ret = Vec::with_capacity(finished.len());
             for finish in finished {

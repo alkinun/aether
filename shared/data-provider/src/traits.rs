@@ -60,7 +60,7 @@ pub trait LengthKnownDataProvider {
 
 pub(crate) fn bytes_to_tokens(data: &[u8], token_size: TokenSize) -> Result<Vec<i32>> {
     let token_len = usize::from(token_size);
-    if data.len() % token_len != 0 {
+    if !data.len().is_multiple_of(token_len) {
         bail!(
             "token data length {} is not divisible by token size {}",
             data.len(),

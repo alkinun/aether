@@ -158,6 +158,10 @@ pub enum ClientRoleInRound {
 }
 
 impl ClientMetrics {
+    fn update_tcp_metrics(&self, update: impl FnOnce(&mut TcpMetrics)) {
+        update(&mut self.tcp_metrics.lock().unwrap());
+    }
+
     pub fn new(metrics_port: Option<u16>, print_metrics_interval: Option<Duration>) -> Self {
         let meter = global::meter("psyche_client");
 
@@ -340,27 +344,27 @@ impl ClientMetrics {
 
     pub fn record_broadcast_seen(&self) {
         self.broadcasts_seen_counter.add(1, &[]);
-        self.tcp_metrics.lock().unwrap().broadcasts_seen += 1;
+        self.update_tcp_metrics(|metrics| metrics.broadcasts_seen += 1);
     }
 
     pub fn record_apply_message_success(&self, step: u32, from_peer: impl Display, kind: &str) {
         debug!(name: "apply_message_success", step=%step, kind=%kind, from=%from_peer);
         self.apply_message_success_counter
             .add(1, &[KeyValue::new("type", kind.to_string())]);
-        self.tcp_metrics.lock().unwrap().apply_message_success += 1;
+        self.update_tcp_metrics(|metrics| metrics.apply_message_success += 1);
     }
 
     pub fn record_apply_message_failure(&self, step: u32, from_peer: impl Display, kind: &str) {
         debug!(name: "apply_message_failure", step=%step, kind=%kind, from=%from_peer);
         self.apply_message_failure_counter
             .add(1, &[KeyValue::new("type", kind.to_string())]);
-        self.tcp_metrics.lock().unwrap().apply_message_failure += 1;
+        self.update_tcp_metrics(|metrics| metrics.apply_message_failure += 1);
     }
 
     pub fn record_apply_message_ignored(&self, kind: impl Display) {
         self.apply_message_ignored_counter
             .add(1, &[KeyValue::new("type", kind.to_string())]);
-        self.tcp_metrics.lock().unwrap().apply_message_ignored += 1;
+        self.update_tcp_metrics(|metrics| metrics.apply_message_ignored += 1);
     }
 
     pub fn record_finishes_received(
@@ -375,17 +379,11 @@ impl ClientMetrics {
         if current_round {
             self.finishes_received_current_round_gauge
                 .record(count, &[]);
-            self.tcp_metrics
-                .lock()
-                .unwrap()
-                .finishes_received_current_round = count;
+            self.update_tcp_metrics(|metrics| metrics.finishes_received_current_round = count);
         } else {
             self.finishes_received_previous_round_gauge
                 .record(count, &[]);
-            self.tcp_metrics
-                .lock()
-                .unwrap()
-                .finishes_received_previous_round = count;
+            self.update_tcp_metrics(|metrics| metrics.finishes_received_previous_round = count);
         }
     }
 
@@ -401,17 +399,15 @@ impl ClientMetrics {
         if current_round {
             self.result_announcements_received_current_round_gauge
                 .record(count, &[]);
-            self.tcp_metrics
-                .lock()
-                .unwrap()
-                .result_announcements_received_current_round = count;
+            self.update_tcp_metrics(|metrics| {
+                metrics.result_announcements_received_current_round = count
+            });
         } else {
             self.result_announcements_received_previous_round_gauge
                 .record(count, &[]);
-            self.tcp_metrics
-                .lock()
-                .unwrap()
-                .result_announcements_received_previous_round = count;
+            self.update_tcp_metrics(|metrics| {
+                metrics.result_announcements_received_previous_round = count
+            });
         }
     }
 
@@ -426,42 +422,36 @@ impl ClientMetrics {
         if current_round {
             self.results_downloaded_current_round_gauge
                 .record(count, &[]);
-            self.tcp_metrics
-                .lock()
-                .unwrap()
-                .results_downloaded_current_round = count;
+            self.update_tcp_metrics(|metrics| metrics.results_downloaded_current_round = count);
         } else {
             self.results_downloaded_previous_round_gauge
                 .record(count, &[]);
-            self.tcp_metrics
-                .lock()
-                .unwrap()
-                .results_downloaded_previous_round = count;
+            self.update_tcp_metrics(|metrics| metrics.results_downloaded_previous_round = count);
         }
     }
 
     pub fn record_witness_send(&self, kind: impl Display) {
         self.witnesses_sent
             .add(1, &[KeyValue::new("type", kind.to_string())]);
-        self.tcp_metrics.lock().unwrap().witnesses_sent += 1;
+        self.update_tcp_metrics(|metrics| metrics.witnesses_sent += 1);
     }
 
     pub fn record_download_started(&self, hash: impl Display, kind: impl Display) {
         debug!(name: "download_started", hash = %hash);
         self.downloads_started_counter
             .add(1, &[KeyValue::new("type", kind.to_string())]);
-        self.tcp_metrics.lock().unwrap().downloads_started += 1;
+        self.update_tcp_metrics(|metrics| metrics.downloads_started += 1);
     }
     pub fn record_download_retry(&self, hash: impl Display) {
         debug!(name: "download_retry", hash = %hash);
         self.downloads_retry_counter.add(1, &[]);
-        self.tcp_metrics.lock().unwrap().downloads_retry += 1;
+        self.update_tcp_metrics(|metrics| metrics.downloads_retry += 1);
     }
 
     pub fn update_download_progress(&self, newly_downloaded_bytes: u64) {
         self.downloads_bytes_counter
             .add(newly_downloaded_bytes, &[]);
-        self.tcp_metrics.lock().unwrap().downloads_bytes += newly_downloaded_bytes;
+        self.update_tcp_metrics(|metrics| metrics.downloads_bytes += newly_downloaded_bytes);
     }
 
     pub fn record_download_completed(&self, hash: impl Display, from_peer: impl Display) {
@@ -471,17 +461,17 @@ impl ClientMetrics {
             from_peer =%from_peer
         );
         self.downloads_finished_counter.add(1, &[]);
-        self.tcp_metrics.lock().unwrap().downloads_finished += 1;
+        self.update_tcp_metrics(|metrics| metrics.downloads_finished += 1);
     }
 
     pub fn record_download_failed(&self) {
         self.downloads_failed_counter.add(1, &[]);
-        self.tcp_metrics.lock().unwrap().downloads_failed += 1;
+        self.update_tcp_metrics(|metrics| metrics.downloads_failed += 1);
     }
 
     pub fn record_download_perma_failed(&self) {
         self.downloads_perma_failed_counter.add(1, &[]);
-        self.tcp_metrics.lock().unwrap().downloads_perma_failed += 1;
+        self.update_tcp_metrics(|metrics| metrics.downloads_perma_failed += 1);
     }
 
     pub fn record_p2p_model_parameter_download_failed(&self) {
@@ -505,8 +495,7 @@ impl ClientMetrics {
             }
         }
 
-        // Update shared state
-        self.tcp_metrics.lock().unwrap().connected_peers = connections.to_vec();
+        self.update_tcp_metrics(|metrics| metrics.connected_peers = connections.to_vec());
 
         // record connection count
         self.peer_connections.record(
@@ -520,12 +509,12 @@ impl ClientMetrics {
         let neighbor_ids = neighbors.iter().map(|p| p.to_string()).collect::<Vec<_>>();
         debug!(name: "gossip_neighbors", neighbors =  neighbor_ids.join(","));
         self.gossip_neighbors.record(num_neighbors, &[]);
-        self.tcp_metrics.lock().unwrap().gossip_neighbors = neighbor_ids;
+        self.update_tcp_metrics(|metrics| metrics.gossip_neighbors = neighbor_ids);
     }
 
     pub fn update_bandwidth(&self, bytes_per_second: f64) {
         self.bandwidth.record(bytes_per_second, &[]);
-        self.tcp_metrics.lock().unwrap().bandwidth = bytes_per_second;
+        self.update_tcp_metrics(|metrics| metrics.bandwidth = bytes_per_second);
     }
 
     pub fn update_round_state(&self, step: u32, role: ClientRoleInRound) {
@@ -533,11 +522,10 @@ impl ClientMetrics {
 
         let participating = !matches!(role, ClientRoleInRound::NotInRound) as u64;
 
-        {
-            let mut metrics = self.tcp_metrics.lock().unwrap();
+        self.update_tcp_metrics(|metrics| {
             metrics.round_step = step;
             metrics.role = role;
-        }
+        });
 
         self.participating_in_round.record(
             participating,

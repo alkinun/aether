@@ -8,7 +8,7 @@ psyche-centralized-shared = { path = "../shared" }
 psyche-client.workspace = true
 psyche-coordinator.workspace = true
 psyche-core.workspace = true
-psyche-data-provider.workspace = true
+psyche-data-provider = { workspace = true, features = ["remote"] }
 psyche-network.workspace = true
 psyche-tui.workspace = true
 psyche-watcher.workspace = true

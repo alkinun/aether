@@ -6,7 +6,7 @@ edition = "2021"
 [dependencies]
 psyche-core = { workspace = true, features = ["rand"] }
 psyche-coordinator.workspace = true
-psyche-data-provider.workspace = true
+psyche-data-provider = { workspace = true, features = ["remote"] }
 psyche-event-sourcing.workspace = true
 psyche-eval.workspace = true
 psyche-metrics.workspace = true

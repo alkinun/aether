@@ -4,6 +4,7 @@
 use crate::config;
 use anyhow::Result;
 use std::{
+    env,
     io::{BufRead, BufReader},
     path::PathBuf,
     process::{Command, Stdio},
@@ -64,23 +65,23 @@ impl Env {
         cmd.env("LIBTORCH_USE_PYTORCH", "1")
             .env("LIBTORCH_BYPASS_VERSION_CHECK", "1")
             .env("RUST_MIN_STACK", "268435456");
-        // Prepend every torch-related lib dir so libtorch_cuda and the CUDA
-        // runtime/cublas/etc. from the nvidia pip packages all resolve.
-        for lib in &self.torch_lib_dirs {
-            prepend_library_path(cmd, "LD_LIBRARY_PATH", lib);
-            prepend_library_path(cmd, "DYLD_LIBRARY_PATH", lib);
-        }
+        prepend_library_paths(cmd, "LD_LIBRARY_PATH", &self.torch_lib_dirs);
+        prepend_library_paths(cmd, "DYLD_LIBRARY_PATH", &self.torch_lib_dirs);
     }
 }
 
-fn prepend_library_path(cmd: &mut Command, var: &str, entry: &std::path::Path) {
-    let new = match std::env::var(var) {
-        Ok(existing) if !existing.is_empty() => {
-            format!("{}:{}", entry.to_string_lossy(), existing)
-        }
-        _ => entry.to_string_lossy().into_owned(),
-    };
-    cmd.env(var, new);
+fn prepend_library_paths(cmd: &mut Command, var: &str, entries: &[PathBuf]) {
+    if entries.is_empty() {
+        return;
+    }
+
+    let mut paths = entries.to_vec();
+    if let Some(existing) = env::var_os(var) {
+        paths.extend(env::split_paths(&existing));
+    }
+    if let Ok(joined) = env::join_paths(paths) {
+        cmd.env(var, joined);
+    }
 }
 
 /// Locate every lib dir libtorch needs. Collects `<torch>/lib` plus each

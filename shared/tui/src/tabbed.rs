@@ -7,13 +7,11 @@ use ratatui::{
     text::Span,
     widgets::{Block, Borders, Tabs, Widget},
 };
-use std::marker::PhantomData;
 
 pub struct TabbedWidget<T: CustomWidgetTuple> {
     widgets: T,
     current_tab: usize,
     tab_titles: Vec<String>,
-    _phantom: PhantomData<T::Data>,
 }
 
 pub trait CustomWidgetTuple: Send + 'static {
@@ -29,13 +27,12 @@ impl<T: CustomWidgetTuple> TabbedWidget<T> {
             widgets,
             current_tab: 0,
             tab_titles: tab_titles.iter().map(|x| x.to_string()).collect(),
-            _phantom: PhantomData,
         }
     }
 
     fn get_tab_from_key(&self, code: &KeyCode) -> Option<usize> {
         match code {
-            KeyCode::Char(c) => c.to_digit(10).map(|d| d as usize - 1),
+            KeyCode::Char(c) => c.to_digit(10).and_then(|d| (d as usize).checked_sub(1)),
             _ => None,
         }
     }
@@ -93,179 +90,46 @@ impl<T: CustomWidgetTuple> CustomWidget for TabbedWidget<T> {
     }
 }
 
-// NOTE:
-// I cannot, for the life of me, figure out how to write this as a macro that knows which index an item is in the tuple.
-// I'll just copy-paste for now. lol.
-
-impl<T1> CustomWidgetTuple for (T1,)
-where
-    T1: CustomWidget,
-{
-    type Data = (T1::Data,);
-
-    fn len(&self) -> usize {
-        1
-    }
-
-    fn render_at(&mut self, index: usize, area: Rect, buf: &mut Buffer, state: &Self::Data) {
-        let (t1,) = self;
-        if index == 0 {
-            t1.render(area, buf, &state.0);
-        }
-    }
-
-    fn on_ui_event_at(&mut self, index: usize, event: &Event) {
-        let (t1,) = self;
-        if index == 0 {
-            t1.on_ui_event(event)
-        }
-    }
+macro_rules! tuple_len {
+    ($($type:ident),+) => {
+        [$(tuple_len!(@unit $type)),+].len()
+    };
+    (@unit $type:ident) => {
+        ()
+    };
 }
 
-impl<T1, T2> CustomWidgetTuple for (T1, T2)
-where
-    T1: CustomWidget,
-    T2: CustomWidget,
-{
-    type Data = (T1::Data, T2::Data);
+macro_rules! impl_custom_widget_tuple {
+    ($(($type:ident, $index:tt)),+) => {
+        impl<$($type),+> CustomWidgetTuple for ($($type,)+)
+        where
+            $($type: CustomWidget),+
+        {
+            type Data = ($($type::Data,)+);
 
-    fn len(&self) -> usize {
-        2
-    }
-
-    fn render_at(&mut self, index: usize, area: Rect, buf: &mut Buffer, state: &Self::Data) {
-        let (t1, t2) = self;
-        match index {
-            0 => {
-                t1.render(area, buf, &state.0);
+            fn len(&self) -> usize {
+                tuple_len!($($type),+)
             }
-            1 => {
-                t2.render(area, buf, &state.1);
-            }
-            _ => {}
-        }
-    }
 
-    fn on_ui_event_at(&mut self, index: usize, event: &Event) {
-        let (t1, t2) = self;
-        match index {
-            0 => t1.on_ui_event(event),
-            1 => t2.on_ui_event(event),
-            _ => {}
+            fn render_at(&mut self, index: usize, area: Rect, buf: &mut Buffer, state: &Self::Data) {
+                match index {
+                    $($index => self.$index.render(area, buf, &state.$index),)+
+                    _ => {}
+                }
+            }
+
+            fn on_ui_event_at(&mut self, index: usize, event: &Event) {
+                match index {
+                    $($index => self.$index.on_ui_event(event),)+
+                    _ => {}
+                }
+            }
         }
-    }
+    };
 }
 
-impl<T1, T2, T3> CustomWidgetTuple for (T1, T2, T3)
-where
-    T1: CustomWidget,
-    T2: CustomWidget,
-    T3: CustomWidget,
-{
-    type Data = (T1::Data, T2::Data, T3::Data);
-
-    fn len(&self) -> usize {
-        3
-    }
-
-    fn render_at(&mut self, index: usize, area: Rect, buf: &mut Buffer, state: &Self::Data) {
-        let (t1, t2, t3) = self;
-        match index {
-            0 => {
-                t1.render(area, buf, &state.0);
-            }
-            1 => {
-                t2.render(area, buf, &state.1);
-            }
-            2 => {
-                t3.render(area, buf, &state.2);
-            }
-            _ => {}
-        }
-    }
-
-    fn on_ui_event_at(&mut self, index: usize, event: &Event) {
-        let (t1, t2, t3) = self;
-        match index {
-            0 => t1.on_ui_event(event),
-            1 => t2.on_ui_event(event),
-            2 => t3.on_ui_event(event),
-            _ => {}
-        }
-    }
-}
-
-impl<T1, T2, T3, T4> CustomWidgetTuple for (T1, T2, T3, T4)
-where
-    T1: CustomWidget,
-    T2: CustomWidget,
-    T3: CustomWidget,
-    T4: CustomWidget,
-{
-    type Data = (T1::Data, T2::Data, T3::Data, T4::Data);
-
-    fn len(&self) -> usize {
-        4
-    }
-
-    fn render_at(&mut self, index: usize, area: Rect, buf: &mut Buffer, state: &Self::Data) {
-        let (t1, t2, t3, t4) = self;
-        match index {
-            0 => t1.render(area, buf, &state.0),
-            1 => t2.render(area, buf, &state.1),
-            2 => t3.render(area, buf, &state.2),
-            3 => t4.render(area, buf, &state.3),
-            _ => {}
-        }
-    }
-
-    fn on_ui_event_at(&mut self, index: usize, event: &Event) {
-        let (t1, t2, t3, t4) = self;
-        match index {
-            0 => t1.on_ui_event(event),
-            1 => t2.on_ui_event(event),
-            2 => t3.on_ui_event(event),
-            3 => t4.on_ui_event(event),
-            _ => {}
-        }
-    }
-}
-
-impl<T1, T2, T3, T4, T5> CustomWidgetTuple for (T1, T2, T3, T4, T5)
-where
-    T1: CustomWidget,
-    T2: CustomWidget,
-    T3: CustomWidget,
-    T4: CustomWidget,
-    T5: CustomWidget,
-{
-    type Data = (T1::Data, T2::Data, T3::Data, T4::Data, T5::Data);
-
-    fn len(&self) -> usize {
-        5
-    }
-
-    fn render_at(&mut self, index: usize, area: Rect, buf: &mut Buffer, state: &Self::Data) {
-        let (t1, t2, t3, t4, t5) = self;
-        match index {
-            0 => t1.render(area, buf, &state.0),
-            1 => t2.render(area, buf, &state.1),
-            2 => t3.render(area, buf, &state.2),
-            3 => t4.render(area, buf, &state.3),
-            4 => t5.render(area, buf, &state.4),
-            _ => {}
-        }
-    }
-
-    fn on_ui_event_at(&mut self, index: usize, event: &Event) {
-        let (t1, t2, t3, t4, t5) = self;
-        match index {
-            0 => t1.on_ui_event(event),
-            1 => t2.on_ui_event(event),
-            2 => t3.on_ui_event(event),
-            3 => t4.on_ui_event(event),
-            4 => t5.on_ui_event(event),
-            _ => {}
-        }
-    }
-}
+impl_custom_widget_tuple!((T1, 0));
+impl_custom_widget_tuple!((T1, 0), (T2, 1));
+impl_custom_widget_tuple!((T1, 0), (T2, 1), (T3, 2));
+impl_custom_widget_tuple!((T1, 0), (T2, 1), (T3, 2), (T4, 3));
+impl_custom_widget_tuple!((T1, 0), (T2, 1), (T3, 2), (T4, 3), (T5, 4));

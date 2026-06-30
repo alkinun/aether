@@ -11,6 +11,7 @@ use tokio::{
     sync::mpsc::{self, Sender},
 };
 use tokio_util::sync::CancellationToken;
+use tracing::error;
 
 pub use app::App;
 pub use logging::{logging, LogOutput, LoggerWidget, ServiceInfo};
@@ -24,13 +25,15 @@ pub fn start_render_loop<T: CustomWidget>(
 ) -> Result<(CancellationToken, Sender<T::Data>)> {
     let (tx, rx) = mpsc::channel(10);
     let cancel = CancellationToken::new();
+    let terminal = init_terminal()?;
+
     tokio::spawn({
         let cancel = cancel.clone();
         async move {
-            let terminal = init_terminal().unwrap();
-            let start_result = App::new(widget).start(cancel, terminal, rx).await;
-            start_result.unwrap();
-            println!("explicit shutdown :)")
+            if let Err(error) = App::new(widget).start(cancel.clone(), terminal, rx).await {
+                error!("TUI render loop failed: {error:#}");
+                cancel.cancel();
+            }
         }
     });
     Ok((cancel, tx))
@@ -53,8 +56,10 @@ pub fn setup_ctrl_c() -> CancellationToken {
     tokio::spawn({
         let token = token.clone();
         async move {
-            signal::ctrl_c().await.unwrap();
-            token.cancel();
+            match signal::ctrl_c().await {
+                Ok(()) => token.cancel(),
+                Err(error) => error!("failed to listen for ctrl-c: {error:#}"),
+            }
         }
     });
     token

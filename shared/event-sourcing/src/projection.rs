@@ -533,17 +533,18 @@ impl ClusterProjection {
                 EventData::ResourceSnapshot(rs) => {
                     if let Some((prev_ts, ref prev_rs)) = node.last_resource {
                         let dt_secs = (event.timestamp - prev_ts).num_milliseconds() as u64 / 1000;
-                        if dt_secs > 0 {
-                            node.network_tx_bps = Some(
-                                rs.network_bytes_sent_total
-                                    .saturating_sub(prev_rs.network_bytes_sent_total)
-                                    / dt_secs,
-                            );
-                            node.network_rx_bps = Some(
-                                rs.network_bytes_recv_total
-                                    .saturating_sub(prev_rs.network_bytes_recv_total)
-                                    / dt_secs,
-                            );
+                        let tx_bps = rs
+                            .network_bytes_sent_total
+                            .saturating_sub(prev_rs.network_bytes_sent_total)
+                            .checked_div(dt_secs);
+                        let rx_bps = rs
+                            .network_bytes_recv_total
+                            .saturating_sub(prev_rs.network_bytes_recv_total)
+                            .checked_div(dt_secs);
+
+                        if let (Some(tx_bps), Some(rx_bps)) = (tx_bps, rx_bps) {
+                            node.network_tx_bps = Some(tx_bps);
+                            node.network_rx_bps = Some(rx_bps);
                         }
                     }
                     node.last_resource = Some((event.timestamp, rs.clone()));

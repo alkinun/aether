@@ -1,4 +1,4 @@
-use std::{fs::OpenOptions, path::PathBuf, time::Duration};
+use std::{collections::HashMap, fs::OpenOptions, path::PathBuf, time::Duration};
 
 use crate::CustomWidget;
 use clap::ValueEnum;
@@ -10,12 +10,8 @@ use logfire::{
 use opentelemetry::{trace::TracerProvider, KeyValue};
 use opentelemetry_otlp::{WithExportConfig, WithHttpConfig};
 use opentelemetry_sdk::{
-    error::OTelSdkResult,
     logs::{BatchConfigBuilder, BatchLogProcessor, SdkLoggerProvider},
-    metrics::{
-        data::ResourceMetrics, exporter::PushMetricExporter, PeriodicReader, SdkMeterProvider,
-        Temporality,
-    },
+    metrics::{PeriodicReader, SdkMeterProvider},
     trace::{BatchSpanProcessor, SdkTracerProvider},
     Resource,
 };
@@ -52,46 +48,6 @@ impl ShutdownHandler {
             handler.shutdown()?;
         }
         Ok(())
-    }
-}
-
-/// Exists for type-safety - when you don't specify a metrics exporter, this type is used,
-/// but this can't ever be constructed, because it's an enum with no variants.
-#[derive(Debug)]
-pub enum NoMetrics {}
-impl PushMetricExporter for NoMetrics {
-    fn export<'a, 'b, 'c>(
-        &'a self,
-        _metrics: &'b mut ResourceMetrics,
-    ) -> ::core::pin::Pin<
-        Box<dyn ::core::future::Future<Output = OTelSdkResult> + ::core::marker::Send + 'c>,
-    >
-    where
-        'a: 'c,
-        'b: 'c,
-        Self: 'c,
-    {
-        unreachable!()
-    }
-
-    fn force_flush<'a, 'b>(
-        &'a self,
-    ) -> ::core::pin::Pin<
-        Box<dyn ::core::future::Future<Output = OTelSdkResult> + ::core::marker::Send + 'b>,
-    >
-    where
-        'a: 'b,
-        Self: 'b,
-    {
-        unreachable!()
-    }
-
-    fn shutdown(&self) -> OTelSdkResult {
-        unreachable!()
-    }
-
-    fn temporality(&self) -> Temporality {
-        unreachable!()
     }
 }
 
@@ -256,33 +212,41 @@ impl ServiceInfo {
             KeyValue::new("service.instance.id", self.instance_id),
             KeyValue::new("service.namespace", self.namespace),
             KeyValue::new("deployment.environment.name", self.deployment_environment),
-            KeyValue::new("run.id", self.run_id.unwrap_or("".to_string())),
+            KeyValue::new("run.id", self.run_id.unwrap_or_default()),
         ]
+    }
+}
+
+fn authorization_headers(config: &OpenTelemetry) -> Option<HashMap<String, String>> {
+    config
+        .authorization_header
+        .as_ref()
+        .map(|header| HashMap::from([("authorization".to_string(), header.clone())]))
+}
+
+fn resource_from_service_info(service_info: Option<ServiceInfo>) -> Resource {
+    match service_info {
+        Some(info) => Resource::builder_empty()
+            .with_attributes(info.into_attributes())
+            .build(),
+        None => Resource::builder_empty().build(),
     }
 }
 
 fn create_otel_metrics_handler(
     config: &OpenTelemetry,
-    service_name: Option<ServiceInfo>,
+    service_info: Option<ServiceInfo>,
 ) -> anyhow::Result<OtelMetricsHandler> {
     let mut exporter_builder = opentelemetry_otlp::MetricExporter::builder()
         .with_http()
         .with_endpoint(&config.endpoint);
 
-    if let Some(header) = &config.authorization_header {
-        exporter_builder = exporter_builder.with_headers(std::collections::HashMap::from([(
-            "authorization".to_string(),
-            header.to_string(),
-        )]));
+    if let Some(headers) = authorization_headers(config) {
+        exporter_builder = exporter_builder.with_headers(headers);
     }
 
     let exporter = exporter_builder.build()?;
-
-    let mut resource_builder = Resource::builder_empty();
-    if let Some(info) = service_name {
-        resource_builder = resource_builder.with_attributes(info.into_attributes())
-    }
-    let resource = resource_builder.build();
+    let resource = resource_from_service_info(service_info);
 
     let reader = PeriodicReader::builder(exporter)
         .with_interval(config.report_interval)
@@ -306,20 +270,17 @@ fn create_otel_tracing_handler(
         .with_http()
         .with_endpoint(&config.endpoint);
 
-    if let Some(header) = &config.authorization_header {
-        exporter_builder = exporter_builder.with_headers(std::collections::HashMap::from([(
-            "authorization".to_string(),
-            header.to_string(),
-        )]));
+    if let Some(headers) = authorization_headers(config) {
+        exporter_builder = exporter_builder.with_headers(headers);
     }
 
     let trace_exporter = exporter_builder.build()?;
-
-    let mut resource_builder = Resource::builder_empty();
-    if let Some(service_info) = service_info.clone() {
-        resource_builder = resource_builder.with_attributes(service_info.into_attributes());
-    }
-    let resource = resource_builder.build();
+    let tracer_name = service_info
+        .as_ref()
+        .map(|info| info.name.as_str())
+        .unwrap_or("rust-app")
+        .to_string();
+    let resource = resource_from_service_info(service_info);
 
     let batch_processor = BatchSpanProcessor::builder(trace_exporter).build();
 
@@ -328,11 +289,7 @@ fn create_otel_tracing_handler(
         .with_span_processor(batch_processor)
         .build();
 
-    let tracer = provider.tracer(
-        service_info
-            .map(|s| s.name)
-            .unwrap_or_else(|| "rust-app".to_string()),
-    );
+    let tracer = provider.tracer(tracer_name);
 
     Ok(OtelTracingHandler { provider, tracer })
 }
@@ -345,20 +302,12 @@ pub fn create_otel_logger_handler(
         .with_http()
         .with_endpoint(&config.endpoint);
 
-    if let Some(header) = &config.authorization_header {
-        exporter_builder = exporter_builder.with_headers(std::collections::HashMap::from([(
-            "authorization".to_string(),
-            header.to_string(),
-        )]));
+    if let Some(headers) = authorization_headers(config) {
+        exporter_builder = exporter_builder.with_headers(headers);
     }
 
     let logger_exporter = exporter_builder.build()?;
-
-    let mut resource_builder = Resource::builder_empty();
-    if let Some(service_info) = service_info {
-        resource_builder = resource_builder.with_attributes(service_info.into_attributes());
-    }
-    let resource = resource_builder.build();
+    let resource = resource_from_service_info(service_info);
 
     let provider = SdkLoggerProvider::builder()
         .with_log_processor(

@@ -86,19 +86,16 @@ fn prepend_library_path(cmd: &mut Command, var: &str, entry: &std::path::Path) {
 /// Locate every lib dir libtorch needs. Collects `<torch>/lib` plus each
 /// `nvidia/*/lib` shipped by the CUDA pip wheels (libcudart, libcublas, …).
 ///
-/// **Prefers the user's system torch over the sandbox venv.** The pinned tch-rs
-/// needs a libtorch build that pip wheels don't reliably provide (symbols move
-/// between minor torch releases), so whatever torch already works on the host
-/// is the right one to use; the sandbox venv is only a fallback for hosts with
-/// no system torch.
+/// Prefer the sandbox venv over system Python. torch-sys links against libtorch
+/// C++ symbols, and arbitrary system torch versions can differ at link time.
 fn detect_torch_lib_dirs() -> Vec<PathBuf> {
     let mut candidates: Vec<PathBuf> = Vec::new();
-    if let Some(p) = which("python3").or_else(|| which("python")) {
-        candidates.push(p);
-    }
     let venv_py = config::sandbox_venv().join("bin").join("python");
     if venv_py.exists() && !candidates.contains(&venv_py) {
         candidates.push(venv_py);
+    }
+    if let Some(p) = which("python3").or_else(|| which("python")) {
+        candidates.push(p);
     }
     for python in &candidates {
         if let Some(dirs) = probe_torch_lib_dirs(python) {

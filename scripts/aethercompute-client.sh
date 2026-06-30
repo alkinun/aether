@@ -50,11 +50,9 @@ REPO_REF="${AETHER_REPO_REF:-main}"
 
 VOLUNTEER_CRATE="psyche-centralized-volunteer"
 RUST_PROFILE="minimal"
-# Fallback torch version for hosts with NO system torch. The pinned tch-rs needs
-# a libtorch build that pip wheels don't reliably provide (symbols move between
-# minor torch releases), so we prefer the user's existing system torch and only
-# install this as a last resort. 2.11.0 is empirically compatible with this rev.
-TORCH_VERSION="2.11.0"
+# Pinned torch used by torch-sys/tch. Do not mix arbitrary system torch with this
+# build: minor torch releases change C++ symbols and can fail at link time.
+TORCH_VERSION="2.9.1"
 
 # --- pretty output ---------------------------------------------------------
 # Keep this palette aligned with architectures/centralized/volunteer/src/brand.rs.
@@ -229,38 +227,35 @@ ensure_python() {
 }
 
 ensure_torch() {
-  # tch-rs needs a libtorch build that pip wheels don't reliably provide (symbols
-  # move between minor torch releases). So prefer the user's existing system
-  # torch — that's the combination known to work for their build.
-  if python3 -c 'import torch' >/dev/null 2>&1; then
+  ensure_python || return 1
+
+  if "$VENV/bin/python" -c "import torch, sys; sys.exit(0 if torch.__version__.split('+', 1)[0] == '$TORCH_VERSION' else 1)" >/dev/null 2>&1; then
     local ver
-    ver="$(python3 -c 'import torch;print(torch.__version__)' 2>/dev/null || echo "?")"
-    ok "using system torch ${ver}"
+    ver="$("$VENV/bin/python" -c 'import torch;print(torch.__version__)' 2>/dev/null || echo "?")"
+    ok "using sandbox torch ${ver}"
     return 0
   fi
 
-  # No system torch — provision one in the sandbox as a best-effort fallback.
-  warn "no system torch found — installing $TORCH_VERSION into the sandbox"
-  ensure_python || return 1
+  warn "installing sandbox torch $TORCH_VERSION"
 
   if is_linux && ! has_nvidia; then
     run_step "installing torch $TORCH_VERSION (CPU)" \
-      "$VENV/bin/pip" install "torch==$TORCH_VERSION" --index-url https://download.pytorch.org/whl/cpu \
+      "$VENV/bin/pip" install --force-reinstall "torch==$TORCH_VERSION" --index-url https://download.pytorch.org/whl/cpu \
       || die "torch install failed. See $INSTALL_LOG"
   else
     local flavor="CUDA"
     is_macos && flavor="macOS (MPS-capable)"
     run_step "installing torch $TORCH_VERSION ($flavor)" \
-      "$VENV/bin/pip" install "torch==$TORCH_VERSION" \
+      "$VENV/bin/pip" install --force-reinstall "torch==$TORCH_VERSION" \
       || die "torch install failed. See $INSTALL_LOG"
   fi
 }
 
 torch_lib_dirs() {
   # torch/lib plus every nvidia/*/lib from the CUDA pip wheels — all needed on
-  # the loader path for libtorch_cuda to resolve. Uses the system python3
-  # (matching the torch the build/run actually uses).
-  python3 -c '
+  # the loader path for libtorch_cuda to resolve. Uses the sandbox python so the
+  # build and runtime libtorch always match.
+  "$VENV/bin/python" -c '
 import pathlib
 try:
     import torch
@@ -393,7 +388,8 @@ do_launch() {
   export LIBTORCH_USE_PYTORCH=1
   export LIBTORCH_BYPASS_VERSION_CHECK=1
   export RUST_MIN_STACK=268435456
-  export PATH="$CARGO_HOME/bin:$PATH"
+  export VIRTUAL_ENV="$VENV"
+  export PATH="$VENV/bin:$CARGO_HOME/bin:$PATH"
 
   printf "  ${cyan}${bold}setup complete${reset}\n"
   printf "  ${dim}handing off to the launcher…${reset}\n\n"

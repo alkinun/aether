@@ -38,7 +38,7 @@ cold_start_warmup_steps = 0
 # "train.aethercompute.org:39406". The host is what volunteers connect to; the
 # port is both that and what the server binds (0.0.0.0:<port>) — expose 39406.
 [model.LLM.data_location]
-Server = "46.224.237.28:39406"
+Server = "167.233.75.197:39406"
 
 [model.LLM.checkpoint.Hub]
 repo_id = "aethercompute/deepseek-v3-dense-250m-1b"

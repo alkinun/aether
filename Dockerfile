@@ -69,6 +69,6 @@ COPY scripts ./scripts
 
 VOLUME ["/app/data", "/app/.aether-control"]
 
-EXPOSE 39405 8080 8081
+EXPOSE 39405 39406 8080 8081
 
 CMD ["/bin/sh", "-c", "export LD_LIBRARY_PATH=$(python3 -c \"import os, torch; print(os.path.join(os.path.dirname(torch.__file__), 'lib'))\"):${LD_LIBRARY_PATH}; exec python3 scripts/training-control-dashboard.py"]

@@ -567,11 +567,11 @@ async fn shutdown_node_in_training_and_complete_round() {
 //     assert_with_retries(|| server_handle.get_pending_clients_len(), 1).await;
 // }
 
-/// A new client attempts to joins the network in the middle of a run.
-/// In the next warmup state it should request the model via P2P to the other clients.
-/// The new client can train a whole epoch with the new obtained model.
+/// A new client attempts to join the network in the middle of a run.
+/// It downloads the checkpoint during the current epoch, signals readiness,
+/// and is admitted at the next epoch boundary where it trains normally.
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-async fn client_join_in_training_and_get_model_using_p2p() {
+async fn client_join_in_training_and_get_model() {
     // start a normal run with 2 clients
     let init_min_clients = 2;
     let global_batch_size = 3;
@@ -639,11 +639,11 @@ async fn client_join_in_training_and_get_model_using_p2p() {
 
     assert_with_retries(
         || server_handle.get_checkpoint(),
-        std::mem::discriminant(&Checkpoint::P2P(HubRepo::dummy())),
+        std::mem::discriminant(&Checkpoint::Dummy(HubRepo::dummy())),
     )
     .await;
 
-    // check that the run state evolves naturally to Warmup where the model gets shared
+    // check that the run state evolves naturally to Warmup
     assert_with_retries(|| server_handle.get_run_state(), RunState::Warmup).await;
 
     info!("waiting for end of round!");
@@ -654,16 +654,15 @@ async fn client_join_in_training_and_get_model_using_p2p() {
     info!("waiting for next epoch!");
     assert_with_retries(|| server_handle.get_current_epoch(), 2).await;
 
-    // check that the clients length shows the new joined client trained with new p2p shared model
+    // check that the clients length shows the new joined client trained successfully
     assert_with_retries(|| server_handle.get_clients_len(), 3).await;
 }
 
 /// Two new clients attempt to join the network in the middle of a run.
-/// In the next warmup state they should request the model via P2P to the other clients.
-/// The clients should request not initialized parameters between each other but they should try with other peer.
-/// The new clients can train a whole epoch with the new obtained model.
+/// Both download the checkpoint, signal readiness, and are admitted at the
+/// next epoch boundary where they train normally alongside the originals.
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
-async fn two_clients_join_in_training_and_get_model_using_p2p() {
+async fn two_clients_join_in_training_and_get_model() {
     // start a normal run with 2 clients
     let init_min_clients = 2;
     let global_batch_size = 4;
@@ -722,11 +721,11 @@ async fn two_clients_join_in_training_and_get_model_using_p2p() {
 
     assert_with_retries(
         || server_handle.get_checkpoint(),
-        std::mem::discriminant(&Checkpoint::P2P(HubRepo::dummy())),
+        std::mem::discriminant(&Checkpoint::Dummy(HubRepo::dummy())),
     )
     .await;
 
-    // check that the run state evolves naturally to Warmup where the model gets shared
+    // check that the run state evolves naturally to Warmup
     assert_with_retries(|| server_handle.get_run_state(), RunState::Warmup).await;
 
     info!("waiting for end of round!");
@@ -735,6 +734,6 @@ async fn two_clients_join_in_training_and_get_model_using_p2p() {
     info!("waiting for next epoch!");
     assert_with_retries(|| server_handle.get_current_epoch(), 2).await;
 
-    // check that the clients length shows the new joined client trained with new p2p shared model
+    // check that the clients length shows both new clients trained successfully
     assert_with_retries(|| server_handle.get_clients_len(), 4).await;
 }

@@ -663,34 +663,16 @@ impl App {
 
     async fn on_tick(&mut self) {
         self.kick_unhealthy_clients();
-        // Determine which clients to pass to the coordinator for epoch admission.
+        // Only admit clients that have signalled ReadyForEpoch (checkpoint
+        // loaded). Syncing clients stay in `pending_clients` and join at a
+        // later epoch boundary once they finish downloading — this prevents
+        // slow joiners from disrupting warmup.
         //
-        // For non-P2P checkpoints (Hub, GCS, Dummy): only admit clients that
-        // have signalled readiness (checkpoint loaded). Syncing clients stay in
-        // `pending_clients` and join at a later epoch boundary once they finish
-        // downloading — this prevents slow joiners from disrupting warmup.
-        //
-        // For P2P checkpoints: admit ALL connected clients. P2P download
-        // requires gossip connectivity which is only established after
-        // admission, so we can't gate on readiness here.
-        let checkpoint_is_p2p = match &self.coordinator.model {
-            Model::LLM(llm) => matches!(llm.checkpoint, Checkpoint::P2P(_) | Checkpoint::P2PGcs(_)),
-        };
-
-        let (admission_iter, admission_count) = if checkpoint_is_p2p {
-            let all: Vec<&NodeIdentity> = self
-                .backend
-                .pending_clients
-                .iter()
-                .chain(self.backend.ready_clients.iter())
-                .collect();
-            let count = all.len();
-            (all, count)
-        } else {
-            let ready: Vec<&NodeIdentity> = self.backend.ready_clients.iter().collect();
-            let count = ready.len();
-            (ready, count)
-        };
+        // Checkpoints are always Hub/GCS (never converted to P2P), so every
+        // client can pre-download before admission and enter warmup already
+        // initialized.
+        let admission_iter: Vec<&NodeIdentity> = self.backend.ready_clients.iter().collect();
+        let admission_count = admission_iter.len();
 
         let now = Self::get_timestamp();
         let admission_ready_at = self

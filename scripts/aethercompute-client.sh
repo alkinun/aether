@@ -10,7 +10,8 @@
 # it when you're ready.
 #
 # Usage:
-#   curl -fsSL https://aethercompute.org/client.sh | sh            # install + launch
+#   curl -fsSL https://aethercompute.org/client.sh | sh            # volunteer node
+#   curl -fsSL https://aethercompute.org/client.sh | sh -s seed    # seed node (requires HF_TOKEN, HUB_REPO)
 #   curl -fsSL https://aethercompute.org/client.sh | sh -s update  # pull latest source
 #   curl -fsSL https://aethercompute.org/client.sh | sh -s doctor  # env check
 #   curl -fsSL https://aethercompute.org/client.sh | sh -s uninstall
@@ -295,16 +296,27 @@ and hands the terminal over to it. The TUI performs onboarding, compiles the
 real training client with live progress, and execs it when you're ready.
 
 Usage:
-  curl -fsSL https://aethercompute.org/client.sh | sh           install + launch
+  curl -fsSL https://aethercompute.org/client.sh | sh           volunteer node
+  curl -fsSL https://aethercompute.org/client.sh | sh -s seed   seed node (requires HF_TOKEN, HUB_REPO)
   curl -fsSL https://aethercompute.org/client.sh | sh -s update pull latest source
   curl -fsSL https://aethercompute.org/client.sh | sh -s doctor show what's installed
   curl -fsSL https://aethercompute.org/client.sh | sh -s uninstall
 
 Subcommands:
-  (none)    ensure prerequisites, build, and launch the volunteer TUI
+  (none)    volunteer node: train without uploading checkpoints
+  seed      seed node: train and push checkpoints to HuggingFace Hub every epoch
   update    fetch the latest aether source (re-run without args to rebuild)
   doctor    diagnose the local environment
   uninstall remove all aethercompute data
+
+Seed mode environment (required):
+  HF_TOKEN     HuggingFace access token with write access
+  HUB_REPO     target repo, e.g. "user/model-name"
+
+Seed mode environment (optional):
+  CHECKPOINT_DIR             local checkpoint storage (default: ~/.aethercompute/checkpoints)
+  CHECKPOINT_EPOCH_INTERVAL  push every N epochs (default: 1)
+  KEEP_STEPS                 step checkpoints to retain (default: 3)
 
 Environment:
   AETHER_HOME          install root (default: ~/.aethercompute)
@@ -368,6 +380,29 @@ do_update() {
   hint "re-run without arguments to rebuild + launch."
 }
 
+do_seed() {
+  if [[ -z "${HF_TOKEN:-}" ]]; then
+    die "HF_TOKEN is required for seed mode. Get one at https://huggingface.co/settings/tokens"
+  fi
+  if [[ -z "${HUB_REPO:-}" ]]; then
+    die "HUB_REPO is required for seed mode (e.g. 'user/model-name')"
+  fi
+
+  export CHECKPOINT_EPOCH_INTERVAL="${CHECKPOINT_EPOCH_INTERVAL:-1}"
+  export KEEP_STEPS="${KEEP_STEPS:-3}"
+  export DELETE_OLD_STEPS="${DELETE_OLD_STEPS:-true}"
+  export CHECKPOINT_DIR="${CHECKPOINT_DIR:-$AETHER_HOME/checkpoints}"
+
+  printf "\n  "; brand '◆ AETHERCOMPUTE'; printf "  ${dim}seed node${reset}\n\n"
+  hint "Hub repo:        $HUB_REPO"
+  hint "Checkpoint dir:  $CHECKPOINT_DIR"
+  hint "Push interval:   every $CHECKPOINT_EPOCH_INTERVAL epoch(s)"
+  hint "Keep steps:      $KEEP_STEPS"
+  echo
+
+  do_launch "$@"
+}
+
 do_launch() {
   ensure_repo
   ensure_dirs
@@ -399,6 +434,7 @@ do_launch() {
 main() {
   resolve_paths
   case "${1:-}" in
+    seed)      shift; do_seed "$@" ;;
     update)    do_update; exit 0 ;;
     uninstall) do_uninstall; exit 0 ;;
     doctor)    do_doctor; exit 0 ;;

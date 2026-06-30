@@ -934,29 +934,7 @@ impl Coordinator {
             self.move_clients_to_exited(height);
 
             // Read the pending clients
-            let mut pending_clients_ordered = Vec::with_capacity(pending_clients.len());
-            let mut pending_clients_unordered = HashSet::with_capacity(pending_clients.len());
-            for pending_client in pending_clients {
-                pending_clients_ordered.push(pending_client);
-                pending_clients_unordered.insert(pending_client);
-            }
-
-            // Ensure at least one client in the previous epoch is present in pending_clients for the new epoch.
-            // If all clients are no longer present we need to use a Hub checkpoint since there
-            // will be no peers for P2P sharing.
-            let all_prev_clients_disconnected = !self
-                .epoch_state
-                .clients
-                .iter()
-                .any(|client| pending_clients_unordered.contains(&client.id));
-            if all_prev_clients_disconnected {
-                let Model::LLM(llm) = &mut self.model;
-                match llm.checkpoint {
-                    Checkpoint::P2P(hub_repo) => llm.checkpoint = Checkpoint::Hub(hub_repo),
-                    Checkpoint::P2PGcs(gcs_repo) => llm.checkpoint = Checkpoint::Gcs(gcs_repo),
-                    _ => {}
-                }
-            }
+            let pending_clients_ordered: Vec<&NodeIdentity> = pending_clients.collect();
 
             let cold_start_epoch = self.epoch_state.cold_start_epoch;
             bytemuck::write_zeroes(&mut self.epoch_state);
@@ -1083,15 +1061,10 @@ impl Coordinator {
             let height = current_round.height;
             self.move_clients_to_exited(height);
 
-            // we've completed an epoch, switch to P2P from now on
-            let Model::LLM(llm) = &mut self.model;
-            match llm.checkpoint {
-                Checkpoint::Hub(hub_repo) | Checkpoint::Dummy(hub_repo) => {
-                    llm.checkpoint = Checkpoint::P2P(hub_repo)
-                }
-                Checkpoint::Gcs(gcs_repo) => llm.checkpoint = Checkpoint::P2PGcs(gcs_repo),
-                _ => {}
-            }
+            // Checkpoints stay Hub/GCS permanently. The seed node pushes fresh
+            // weights every epoch, so late joiners can always pre-download from
+            // the hosting service during WaitingForMembers — no P2P download
+            // required, no warmup deadline pressure.
 
             if self.pending_pause.is_true() {
                 self.withdraw_all();

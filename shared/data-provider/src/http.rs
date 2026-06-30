@@ -14,7 +14,7 @@ use tracing::{info, trace};
 
 use crate::{
     file_extensions::DATA_FILE_EXTENSIONS,
-    traits::{LengthKnownDataProvider, TokenizedDataProvider},
+    traits::{bytes_to_tokens, LengthKnownDataProvider, TokenizedDataProvider},
     TokenizedData,
 };
 
@@ -271,19 +271,7 @@ impl HttpDataProvider {
         token_size_in_bytes: TokenSize,
     ) -> Result<Vec<i32>> {
         let data = Self::fetch_data_range(client, url, start, length).await?;
-
-        let tokens: Vec<i32> = data
-            .chunks(token_size_in_bytes.into())
-            .map(|t| {
-                use TokenSize::*;
-                match token_size_in_bytes {
-                    TwoBytes => u16::from_le_bytes(t.try_into().unwrap()) as i32,
-                    FourBytes => u32::from_le_bytes(t.try_into().unwrap()) as i32,
-                }
-            })
-            .collect();
-
-        Ok(tokens)
+        bytes_to_tokens(&data, token_size_in_bytes)
     }
 
     async fn internal_get_samples(&self, data_ids: BatchId) -> Result<Vec<TokenizedData>> {

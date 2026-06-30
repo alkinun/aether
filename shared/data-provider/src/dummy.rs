@@ -1,22 +1,20 @@
 use crate::{traits::TokenizedDataProvider, LengthKnownDataProvider, TokenizedData};
 use anyhow::{bail, Result};
-use psyche_core::{BatchId, TokenSize};
+use psyche_core::BatchId;
 
 pub struct DummyDataProvider {
     seq_len: usize,
-    token_size_in_bytes: TokenSize,
     num_sequences: u64,
 }
 
 impl DummyDataProvider {
     pub fn new(
-        token_size_in_bytes: TokenSize,
+        _token_size_in_bytes: psyche_core::TokenSize,
         num_tokens_per_sequence: usize, // num tokens per sequence
         num_sequences: u64,
     ) -> Self {
         Self {
             seq_len: num_tokens_per_sequence,
-            token_size_in_bytes,
             num_sequences,
         }
     }
@@ -24,20 +22,7 @@ impl DummyDataProvider {
     fn internal_get_samples(&self, num_samples: usize) -> Result<Vec<TokenizedData>> {
         let mut ret: Vec<_> = Vec::new();
         for _ in 0..num_samples {
-            let data_len = usize::from(self.token_size_in_bytes) * self.seq_len;
-            let data = vec![0; data_len];
-
-            let tokens: Vec<i32> = data
-                .chunks(self.token_size_in_bytes.into())
-                .map(|t| {
-                    use TokenSize::*;
-                    match self.token_size_in_bytes {
-                        TwoBytes => u16::from_le_bytes(t.try_into().unwrap()) as i32,
-                        FourBytes => u32::from_le_bytes(t.try_into().unwrap()) as i32,
-                    }
-                })
-                .collect();
-            ret.push(TokenizedData::from_input_ids(tokens));
+            ret.push(TokenizedData::from_input_ids(vec![0; self.seq_len]));
         }
         Ok(ret)
     }

@@ -35,16 +35,16 @@ impl<W: CustomWidget> App<W> {
                     break;
                 }
                 _ = frame_interval.tick() => {
-                    self.draw(&mut terminal.0)?;
+                    self.draw(&mut terminal)?;
                 }
                 Some(Ok(event)) = reader.next() => {
                     trace!(target:"crossterm", "Stdin event received {:?}", event);
                     self.handle_ui_event(event, &shutdown_token);
-                    self.draw(&mut terminal.0)?;
+                    self.draw(&mut terminal)?;
                 }
                 Some(state) = state_rx.recv() => {
                     self.custom_widget_data_state = state;
-                    self.draw(&mut terminal.0)?;
+                    self.draw(&mut terminal)?;
                 }
             }
         }

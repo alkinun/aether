@@ -8,7 +8,7 @@ use tracing::info;
 
 use crate::{
     file_extensions::DATA_FILE_EXTENSIONS,
-    traits::{LengthKnownDataProvider, TokenizedDataProvider},
+    traits::{bytes_to_tokens, LengthKnownDataProvider, TokenizedDataProvider},
     TokenizedData,
 };
 
@@ -148,16 +148,7 @@ impl LocalDataProvider {
             let data_len = usize::from(self.token_size_in_bytes) * self.seq_len;
             let data = &file.as_ref().as_ref()[*byte_offset..*byte_offset + data_len];
 
-            let tokens: Vec<i32> = data
-                .chunks(self.token_size_in_bytes.into())
-                .map(|t| {
-                    use TokenSize::*;
-                    match self.token_size_in_bytes {
-                        TwoBytes => u16::from_le_bytes(t.try_into().unwrap()) as i32,
-                        FourBytes => u32::from_le_bytes(t.try_into().unwrap()) as i32,
-                    }
-                })
-                .collect();
+            let tokens = bytes_to_tokens(data, self.token_size_in_bytes)?;
             ret.push(TokenizedData::from_input_ids(tokens));
         }
         Ok(ret)

@@ -9,13 +9,8 @@ struct Arc {
     name: String,
 }
 
-pub struct ArcEasy {
-    task: Arc,
-}
-
-pub struct ArcChallenge {
-    task: Arc,
-}
+pub struct ArcEasy;
+pub struct ArcChallenge;
 
 fn field_to_string(field: &Field) -> String {
     match field {
@@ -115,22 +110,6 @@ impl ArcEasy {
     }
 }
 
-impl LogLikelihoodTask for ArcEasy {
-    fn get_documents(&self) -> Vec<Document> {
-        self.task.get_documents()
-    }
-
-    fn get_fewshot_documents(&self) -> HashMap<String, Vec<Document>> {
-        self.task.get_fewshot_documents()
-    }
-}
-
-impl Display for ArcEasy {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.task)
-    }
-}
-
 impl ArcChallenge {
     pub fn load() -> Result<TaskType> {
         Arc::load(Self::name())
@@ -138,21 +117,5 @@ impl ArcChallenge {
 
     pub const fn name() -> &'static str {
         "ARC-Challenge"
-    }
-}
-
-impl LogLikelihoodTask for ArcChallenge {
-    fn get_documents(&self) -> Vec<Document> {
-        self.task.get_documents()
-    }
-
-    fn get_fewshot_documents(&self) -> HashMap<String, Vec<Document>> {
-        self.task.get_fewshot_documents()
-    }
-}
-
-impl Display for ArcChallenge {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.task)
     }
 }

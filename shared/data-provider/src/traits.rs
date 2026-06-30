@@ -1,5 +1,5 @@
-use anyhow::Result;
-use psyche_core::BatchId;
+use anyhow::{bail, Result};
+use psyche_core::{BatchId, TokenSize};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Serialize, Deserialize, Debug, PartialEq)]
@@ -56,4 +56,25 @@ pub trait LengthKnownDataProvider {
     fn is_empty(&self) -> bool {
         self.num_sequences() == 0
     }
+}
+
+pub(crate) fn bytes_to_tokens(data: &[u8], token_size: TokenSize) -> Result<Vec<i32>> {
+    let token_len = usize::from(token_size);
+    if data.len() % token_len != 0 {
+        bail!(
+            "token data length {} is not divisible by token size {}",
+            data.len(),
+            token_len
+        );
+    }
+
+    Ok(data
+        .chunks_exact(token_len)
+        .map(|chunk| match token_size {
+            TokenSize::TwoBytes => u16::from_le_bytes([chunk[0], chunk[1]]) as i32,
+            TokenSize::FourBytes => {
+                u32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]) as i32
+            }
+        })
+        .collect())
 }

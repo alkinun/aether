@@ -1,5 +1,6 @@
 use std::{
     io::{self, Write},
+    ops::{Deref, DerefMut},
     panic,
 };
 
@@ -16,6 +17,20 @@ use tracing::{error, trace};
 
 pub struct TerminalWrapper<T: Backend>(pub Terminal<T>);
 
+impl<T: Backend> Deref for TerminalWrapper<T> {
+    type Target = Terminal<T>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<T: Backend> DerefMut for TerminalWrapper<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
 pub fn init_terminal() -> io::Result<TerminalWrapper<impl Backend>> {
     trace!(target:"crossterm", "Initializing terminal");
     enable_raw_mode()?;
@@ -25,13 +40,13 @@ pub fn init_terminal() -> io::Result<TerminalWrapper<impl Backend>> {
     terminal.clear()?;
     terminal.hide_cursor()?;
 
-    // panic messages are getting printed to the alt screen, which is cleared. cringe.
+    // Restore the terminal before printing panic messages.
     let default_panic = std::panic::take_hook();
     panic::set_hook(Box::new(move |info| {
         restore_terminal();
-        io::stdout().flush().unwrap();
+        let _ = io::stdout().flush();
         default_panic(info);
-        io::stdout().flush().unwrap();
+        let _ = io::stdout().flush();
     }));
 
     Ok(TerminalWrapper(terminal))

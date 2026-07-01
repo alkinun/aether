@@ -24,7 +24,7 @@ use tokio::{
     sync::mpsc::{self},
     task::JoinHandle,
 };
-use tracing::{debug, info, trace, trace_span, warn, Instrument};
+use tracing::{debug, error, info, trace, trace_span, warn, Instrument};
 
 use super::{
     cooldown::{CooldownError, CooldownStep, CooldownStepMetadata},
@@ -54,6 +54,7 @@ pub struct StepStateMachine {
     tx_request_download: mpsc::UnboundedSender<(BlobTicket, Tag)>,
     tx_opportunistic_data: mpsc::UnboundedSender<OpportunisticData>,
     tx_broadcast_finished: mpsc::UnboundedSender<FinishedBroadcast>,
+    tx_ready_for_epoch: mpsc::UnboundedSender<()>,
 
     current_round: RoundState,
     previous_round: RoundState,
@@ -63,10 +64,14 @@ pub struct StepStateMachine {
 
     coordinator_state: Coordinator,
 
+    consecutive_desync_steps: u32,
+
     // Handles for HuggingFace uploads running in background
     pending_upload_handles:
         Vec<tokio::task::JoinHandle<Result<(), crate::state::cooldown::CheckpointError>>>,
 }
+
+const DESYNC_REJOIN_THRESHOLD: u32 = 5;
 
 #[derive(Error, Debug)]
 pub enum StepError {
@@ -136,6 +141,7 @@ impl StepStateMachine {
         tx_request_download: mpsc::UnboundedSender<(BlobTicket, Tag)>,
         tx_opportunistic_data: mpsc::UnboundedSender<OpportunisticData>,
         tx_broadcast_finished: mpsc::UnboundedSender<FinishedBroadcast>,
+        tx_ready_for_epoch: mpsc::UnboundedSender<()>,
         stats_logger: StatsLogger,
     ) -> Self {
         let mut previous_round = RoundState::default();
@@ -161,12 +167,15 @@ impl StepStateMachine {
             tx_request_download,
             tx_opportunistic_data,
             tx_broadcast_finished,
+            tx_ready_for_epoch,
 
             coordinator_state,
 
             step_finish_time: None,
             sent_warmup_finished: false,
             sent_warmup_witness: false,
+
+            consecutive_desync_steps: 0,
 
             pending_upload_handles: Vec::new(),
         }
@@ -792,7 +801,34 @@ impl StepStateMachine {
                     round_losses,
                     optim_stats,
                     round_duration,
+                    desync_skips,
                 } = training.finish().await?;
+
+                if desync_skips > 0 {
+                    self.consecutive_desync_steps += 1;
+                    warn!(
+                        step = state.progress.step,
+                        skips = desync_skips,
+                        consecutive = self.consecutive_desync_steps,
+                        "Training step completed with {} DESYNC skip(s), {} consecutive step(s) with skips",
+                        desync_skips, self.consecutive_desync_steps
+                    );
+                    if self.consecutive_desync_steps >= DESYNC_REJOIN_THRESHOLD {
+                        error!(
+                            threshold = DESYNC_REJOIN_THRESHOLD,
+                            "Too many consecutive DESYNC steps, signalling rejoin"
+                        );
+                        let _ = self.tx_ready_for_epoch.send(());
+                        self.consecutive_desync_steps = 0;
+                    }
+                } else if self.consecutive_desync_steps > 0 {
+                    info!(
+                        was = self.consecutive_desync_steps,
+                        "DESYNC recovered, resets to 0"
+                    );
+                    self.consecutive_desync_steps = 0;
+                }
+
                 let step_duration = self
                     .step_finish_time
                     .map(|step_finish_time| Instant::now() - step_finish_time);

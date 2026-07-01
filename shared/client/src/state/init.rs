@@ -933,6 +933,7 @@ impl RunInitConfigAndIO {
             tx_request_download,
             tx_witness,
             tx_broadcast_finished,
+            tx_ready_for_epoch,
             stats_logger,
         ))
     }

@@ -44,6 +44,7 @@ pub struct FinishedTrainers {
     pub round_losses: Vec<f32>,
     pub optim_stats: HashMap<String, f64>,
     pub round_duration: Duration,
+    pub desync_skips: usize,
 }
 
 #[derive(Error, Debug)]
@@ -276,14 +277,16 @@ impl TrainingStepMetadata {
                     let round_duration = Instant::now() - round_start;
                     debug!("Training for round finished, duration {:?}", round_duration);
                     finished.store(true, Ordering::SeqCst);
+                    let (trainers, desync_skips) =
+                        applying.await.map_err(|_| TrainError::ApplyCrashed)??;
                     Ok(FinishedTrainers {
                         evals_or_trainers: MaybeRunningEvals::Running(
-                            model_task_runner
-                                .start(applying.await.map_err(|_| TrainError::ApplyCrashed)??),
+                            model_task_runner.start(trainers),
                         ),
                         round_losses: vec![],
                         optim_stats: HashMap::new(),
                         round_duration,
+                        desync_skips,
                     })
                 })
             } else {
@@ -310,7 +313,7 @@ impl TrainingStepMetadata {
                     let mut round_losses: Vec<f32> = Vec::new();
                     let mut optim_stats: HashMap<String, f64> = HashMap::new();
 
-                    let mut available_trainers =
+                    let (mut available_trainers, desync_skips) =
                         applying.await.map_err(|_| TrainError::ApplyCrashed)??;
 
                     while let Some(data) = next_sample.recv().await {
@@ -490,6 +493,7 @@ impl TrainingStepMetadata {
                         round_losses,
                         optim_stats,
                         round_duration,
+                        desync_skips,
                     })
                 })
             };
@@ -508,14 +512,14 @@ impl TrainingStepMetadata {
         state: &Coordinator,
         previous_round: &mut RoundState,
         current_round: &mut RoundState,
-    ) -> Result<JoinHandle<Result<Vec<Trainer>, ApplyError>>, ApplyError> {
+    ) -> Result<JoinHandle<Result<(Vec<Trainer>, usize), ApplyError>>, ApplyError> {
         if current_round.height == 0 {
             // the first TWO training step of each epoch has no apply phase.
             // but, because we call this once with the default initalized RoundState (round 0)
             // and a second time (when transitioning from round 0 -> round 1), this check will skip
             // the two phases
             trace!("Skipping early apply");
-            return Ok(tokio::task::spawn(async move { Ok(trainers) }));
+            return Ok(tokio::task::spawn(async move { Ok((trainers, 0)) }));
         }
 
         let apply_start = Instant::now();
@@ -568,6 +572,7 @@ impl TrainingStepMetadata {
         Ok(tokio::task::spawn(async move {
                 let payloads = payloads.clone();
                 let mut distro_results: Vec<Vec<DistroResult>> = Vec::new();
+                let mut desync_skips: usize = 0;
 
                 trace!("Have commitments for batches {:?}", commitments.keys().collect::<Vec<_>>());
                 trace!("Have payloads for hashes {:?}", payloads.lock().unwrap().keys().collect::<Vec<_>>());
@@ -613,24 +618,29 @@ impl TrainingStepMetadata {
                         Some(PayloadState::Deserializing(x)) => match x.is_finished() {
                             true => x.await.unwrap(),
                             false => {
-                                return Err(ApplyError::DidNotFinishDeserializingCommitment(
-                                    Box::new(*commitment),
-                                    batch_id,
-                                ));
+                                warn!(
+                                    "DESYNC: Deserialization not finished for consensus commitment 0x{} for batch {}, skipping",
+                                    hex::encode(commitment.data_hash), batch_id
+                                );
+                                desync_skips += 1;
+                                continue;
                             }
                         },
                         Some(PayloadState::Downloading((_, _, ticket))) => {
-                            return Err(ApplyError::DidNotBeginDownloadingCommitment(
-                                Box::new(*commitment),
-                                batch_id,
-                                ticket.hash()
-                            ));
+                            warn!(
+                                "DESYNC: Payload not downloaded for consensus commitment 0x{} for batch {} with blob hash {}, skipping",
+                                hex::encode(commitment.data_hash), batch_id, ticket.hash()
+                            );
+                            desync_skips += 1;
+                            continue;
                         }
                         None => {
-                            return Err(ApplyError::UnknownCommitment(
-                                Box::new(*commitment),
-                                batch_id,
-                            ))
+                            warn!(
+                                "DESYNC: Unknown consensus commitment 0x{} for batch {}, skipping",
+                                hex::encode(commitment.data_hash), batch_id
+                            );
+                            desync_skips += 1;
+                            continue;
                         }
                     };
 
@@ -680,11 +690,12 @@ impl TrainingStepMetadata {
                     }
                 };
                 trace!(
-                    "Apply time: {:.1}s, {} trainers ready",
+                    "Apply time: {:.1}s, {} trainers ready, {} desync skips",
                     (Instant::now() - apply_start).as_secs_f32(),
-                    trainers.len()
+                    trainers.len(),
+                    desync_skips
                 );
-                Ok(trainers)
+                Ok((trainers, desync_skips))
             }.instrument(trace_span!("Applying distro results"))))
     }
 }

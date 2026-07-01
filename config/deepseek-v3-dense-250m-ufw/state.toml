@@ -5,8 +5,8 @@ run_state = "WaitingForMembers"
 warmup_time = 120
 cooldown_time = 5
 epoch_time = 360
-max_round_train_time = 20
-round_witness_time = 5
+max_round_train_time = 40
+round_witness_time = 14
 min_clients = 1
 init_min_clients = 1
 
@@ -21,7 +21,7 @@ global_batch_size_warmup_tokens = 0
 verification_percent = 0
 witness_nodes = 1
 total_steps = 31250
-waiting_for_members_extra_time = 60
+waiting_for_members_extra_time = 120
 
 [model.LLM]
 architecture = "HfDeepseek"

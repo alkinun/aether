@@ -380,7 +380,9 @@ do_update() {
       die "need 'git' or 'tar' to update the aether source."
     fi
   fi
-  ok "source is up to date."
+  local commit
+  commit="$(git -C "$REPO_ROOT" log --oneline -1 2>/dev/null || echo "unknown")"
+  printf "  ${dim}now at: ${cyan}%s${reset}\n" "$commit"
   hint "re-run without arguments to rebuild + launch."
 }
 
@@ -419,6 +421,11 @@ do_launch() {
   ensure_c_compiler || exit 1
   ensure_torch || exit 1
   ensure_volunteer_bin || exit 1
+
+  # Log the commit hash so users can verify which version they're running.
+  local commit
+  commit="$(git -C "$REPO_ROOT" log --oneline -1 2>/dev/null || echo "unknown")"
+  printf "  ${dim}source: ${cyan}%s${reset}\n" "$commit"
 
   local torch_libs
   torch_libs="$(torch_lib_dirs)"

@@ -232,7 +232,6 @@ impl TrainingStepMetadata {
         let warmup_lr_between = state.get_cold_start_warmup_bounds();
         let zero_optim = warmup_lr_between.is_some_and(|_| round.height == 0);
         let epoch = state.progress.epoch;
-        let lr_step = state.effective_lr_step();
 
         event!(train::WitnessElected {
             step: state.progress.step as u64,
@@ -370,7 +369,6 @@ impl TrainingStepMetadata {
                                 event!(train::TrainingStarted { batch_id });
                                 trainer.train(
                                     step,
-                                    lr_step,
                                     Batch {
                                         id: batch_id,
                                         data: BatchData::CPU(batch_data),
@@ -526,7 +524,6 @@ impl TrainingStepMetadata {
 
         let apply_start = Instant::now();
         let step = state.progress.step;
-        let lr_step = state.effective_lr_step();
         let witness_quorum = state.witness_quorum(
             state
                 .previous_round()
@@ -671,7 +668,7 @@ impl TrainingStepMetadata {
                             let distro_results = Some(distro_results.clone());
 
                             tokio::task::spawn_blocking(move || {
-                                trainer.optimize(step, lr_step, warmup_lr_between, distro_results)
+                                trainer.optimize(step, warmup_lr_between, distro_results)
                             })
                         })
                         .collect::<Vec<_>>();

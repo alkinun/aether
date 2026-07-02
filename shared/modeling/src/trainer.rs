@@ -254,7 +254,6 @@ enum ParallelAssignment {
     Train {
         batch: Batch,
         step: u32,
-        lr_step: u32,
         warmup_lr_between: Option<(u32, u32)>,
         zero_optim: bool,
         #[allow(unused)]
@@ -264,7 +263,7 @@ enum ParallelAssignment {
     },
     Optimize {
         distro_results: Option<Vec<DistroResults>>,
-        lr_step: u32,
+        step: u32,
         warmup_lr_between: Option<(u32, u32)>,
     },
     Forward {
@@ -309,7 +308,6 @@ impl Trainer {
     pub fn train(
         self,
         step: u32,
-        lr_step: u32,
         data: Batch,
         warmup_lr_between: Option<(u32, u32)>,
         zero_optim: bool,
@@ -320,7 +318,6 @@ impl Trainer {
         match self {
             Trainer::Local(local_trainer) => local_trainer.train(
                 step,
-                lr_step,
                 data,
                 warmup_lr_between,
                 zero_optim,
@@ -331,7 +328,6 @@ impl Trainer {
             #[cfg(feature = "python")]
             Trainer::PythonDistributed(python) => python.train(
                 step,
-                lr_step,
                 data,
                 warmup_lr_between,
                 zero_optim,
@@ -345,17 +341,16 @@ impl Trainer {
     pub fn optimize(
         self,
         step: u32,
-        lr_step: u32,
         warmup_lr_between: Option<(u32, u32)>,
         distro_results: Option<Vec<DistroResults>>,
     ) -> Result<Self, ApplyDistroResultError> {
         match self {
             Trainer::Local(local_trainer) => local_trainer
-                .optimize(step, lr_step, warmup_lr_between, distro_results)
+                .optimize(step, warmup_lr_between, distro_results)
                 .map(|x| x.into()),
             #[cfg(feature = "python")]
             Trainer::PythonDistributed(python) => python
-                .optimize(step, lr_step, warmup_lr_between, distro_results)
+                .optimize(step, warmup_lr_between, distro_results)
                 .map(|x| x.into()),
         }
     }
@@ -595,7 +590,6 @@ impl LocalTrainer {
     pub fn train(
         self,
         step: u32,
-        lr_step: u32,
         data: Batch,
         warmup_lr_between: Option<(u32, u32)>,
         zero_optim: bool,
@@ -614,7 +608,6 @@ impl LocalTrainer {
             tx.send(ParallelAssignment::Train {
                 batch: data.clone(),
                 step,
-                lr_step,
                 warmup_lr_between,
                 zero_optim,
                 rollback: rollback.clone(),
@@ -667,8 +660,7 @@ impl LocalTrainer {
 
     pub fn optimize(
         self,
-        _step: u32,
-        lr_step: u32,
+        step: u32,
         warmup_lr_between: Option<(u32, u32)>,
         results: Option<Vec<DistroResults>>,
     ) -> Result<Self, ApplyDistroResultError> {
@@ -676,7 +668,7 @@ impl LocalTrainer {
         for (tx, _) in &self.models {
             tx.send(ParallelAssignment::Optimize {
                 distro_results: results.clone(),
-                lr_step,
+                step,
                 warmup_lr_between,
             })
             .map_err(|_| ApplyDistroResultError::SendOptimize)?;
@@ -813,7 +805,6 @@ impl LocalTrainer {
                 Ok(ParallelAssignment::Train {
                     batch,
                     step,
-                    lr_step,
                     warmup_lr_between,
                     zero_optim,
                     rollback: _,
@@ -898,10 +889,10 @@ impl LocalTrainer {
                         grad_accum.zero_grad();
                     }
 
-                    let lr = Trainer::get_lr(&lr_scheduler, lr_step, warmup_lr_between);
-                    let prev_lr = match lr_step {
+                    let lr = Trainer::get_lr(&lr_scheduler, step, warmup_lr_between);
+                    let prev_lr = match step {
                         0 => Trainer::get_lr(&lr_scheduler, 0, warmup_lr_between),
-                        _ => Trainer::get_lr(&lr_scheduler, lr_step - 1, warmup_lr_between),
+                        step => Trainer::get_lr(&lr_scheduler, step - 1, warmup_lr_between),
                     };
 
                     tracing::debug!(
@@ -1092,10 +1083,10 @@ impl LocalTrainer {
                 }
                 Ok(ParallelAssignment::Optimize {
                     distro_results,
-                    lr_step,
+                    step,
                     warmup_lr_between,
                 }) => {
-                    let lr = Trainer::get_lr(&lr_scheduler, lr_step, warmup_lr_between);
+                    let lr = Trainer::get_lr(&lr_scheduler, step, warmup_lr_between);
                     if optimize_step(
                         &mut model,
                         lr,

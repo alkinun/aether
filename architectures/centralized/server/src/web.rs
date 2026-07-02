@@ -439,7 +439,7 @@ async fn model_partial(State(state): State<SharedState>) -> Html<String> {
                 let arch = format_llm_architecture(&llm.architecture);
                 let data_type = format_data_type(&llm.data_type);
                 let cp_label = format_checkpoint_label(&llm.checkpoint);
-                let lr_str = format_lr_schedule(&llm.lr_schedule, coord.effective_lr_step());
+                let lr_str = format_lr_schedule(&llm.lr_schedule, coord.progress.step);
                 let opt_str = format_optimizer(&llm.optimizer);
                 Html(format!(
                     r#"<table border="1">
@@ -538,11 +538,13 @@ async fn timing_partial(State(state): State<SharedState>) -> Html<String> {
 
             let tokens_per_step = coord.get_target_global_batch_size(coord.current_round()) as f64
                 * coord.get_sequence_length() as f64;
-            let remaining_tokens = coord
-                .target_tokens()
-                .saturating_sub(coord.total_tokens_processed(coord.current_round()));
-            let remaining_steps = (remaining_tokens as f64 / tokens_per_step.max(1.0)) as u32;
-            let remaining_tokens_f = remaining_tokens as f64;
+            let training_token_budget = coord.config.total_steps as u64
+                * coord.config.global_batch_size_end as u64
+                * coord.get_sequence_length() as u64;
+            let remaining_tokens = training_token_budget
+                .saturating_sub(coord.total_tokens_processed(coord.current_round()))
+                as f64;
+            let remaining_steps = (remaining_tokens / tokens_per_step.max(1.0)).ceil() as u32;
             let current_tps = points.last().map(|p| p.tokens_per_sec as f64);
             let avg_tps = if points.is_empty() {
                 None
@@ -554,16 +556,16 @@ async fn timing_partial(State(state): State<SharedState>) -> Html<String> {
             };
             let weighted_tps = weighted_tokens_per_sec(&points);
 
-            let avg_eta = estimate_remaining_time(remaining_tokens_f, avg_tps.unwrap_or(0.0));
-            let current_eta =
-                estimate_remaining_time(remaining_tokens_f, current_tps.unwrap_or(0.0));
+            let avg_eta = estimate_remaining_time(remaining_tokens, avg_tps.unwrap_or(0.0));
+            let current_eta = estimate_remaining_time(remaining_tokens, current_tps.unwrap_or(0.0));
             let weighted_eta =
-                estimate_remaining_time(remaining_tokens_f, weighted_tps.unwrap_or(0.0));
+                estimate_remaining_time(remaining_tokens, weighted_tps.unwrap_or(0.0));
 
             Html(format!(
                 r#"<table border="1">
 <tr><td><b>Elapsed</b></td><td>{elapsed}</td></tr>
 <tr><td><b>Remaining Steps</b></td><td>{remaining_steps}</td></tr>
+<tr><td><b>Remaining Tokens</b></td><td>{remaining_tokens}</td></tr>
 <tr><td><b>Tokens / Step</b></td><td>{tokens_per_step:.0}</td></tr>
 <tr><td><b>ETA (weighted avg)</b></td><td>{weighted_eta} <span class="hint">({weighted_tps})</span></td></tr>
 <tr><td><b>ETA (overall avg)</b></td><td>{avg_eta} <span class="hint">({avg_tps})</span></td></tr>
@@ -571,6 +573,7 @@ async fn timing_partial(State(state): State<SharedState>) -> Html<String> {
 </table>"#,
                 elapsed = format_eta(elapsed),
                 remaining_steps = remaining_steps,
+                remaining_tokens = format_tokens(remaining_tokens),
                 tokens_per_step = tokens_per_step,
                 weighted_eta = format_eta(weighted_eta),
                 avg_eta = format_eta(avg_eta),

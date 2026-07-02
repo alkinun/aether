@@ -503,13 +503,13 @@ impl App {
             return;
         };
         let mut log = LogData::new();
-        log.insert("_step", point.step);
+        log.insert("_step", point.tokens_processed);
         log.insert("train/loss", point.loss);
         log.insert("train/perplexity", point.loss.exp());
         log.insert(
             "train/lr",
             match &self.coordinator.model {
-                Model::LLM(llm) => llm.lr_schedule.get_lr(self.coordinator.effective_lr_step()),
+                Model::LLM(llm) => llm.lr_schedule.get_lr(point.step),
             },
         );
         log.insert("train/tokens_per_sec", point.tokens_per_sec);

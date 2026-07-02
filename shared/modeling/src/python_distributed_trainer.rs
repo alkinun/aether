@@ -143,7 +143,6 @@ impl PythonDistributedTrainer {
     pub fn train(
         self,
         step: u32,
-        lr_step: u32,
         mut data: Batch,
         warmup_lr_between: Option<(u32, u32)>,
         zero_optim: bool,
@@ -269,7 +268,6 @@ impl PythonDistributedTrainer {
     pub fn optimize(
         self,
         step: u32,
-        lr_step: u32,
         warmup_lr_between: Option<(u32, u32)>,
         distro_results: Option<Vec<DistroResults>>,
     ) -> Result<Self, ApplyDistroResultError> {

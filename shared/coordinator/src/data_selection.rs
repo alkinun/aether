@@ -137,7 +137,7 @@ mod tests {
 
     fn create_test_coordinator(
         num_nodes: usize,
-        per_client_batch_size: u16,
+        global_batch_size: u16,
         total_steps: u32,
     ) -> Coordinator {
         let clients: Vec<_> = (0..num_nodes)
@@ -154,8 +154,8 @@ mod tests {
 
         let mut coordinator = Coordinator::zeroed();
         coordinator.config.total_steps = total_steps;
-        coordinator.config.global_batch_size_start = per_client_batch_size;
-        coordinator.config.global_batch_size_end = per_client_batch_size;
+        coordinator.config.global_batch_size_start = global_batch_size;
+        coordinator.config.global_batch_size_end = global_batch_size;
         coordinator.epoch_state.clients = FixedVec::from_iter(clients);
 
         coordinator.current_round_mut().unwrap().clients_len =
@@ -166,8 +166,8 @@ mod tests {
 
     #[test]
     fn test_even_distribution() {
-        // 4 trainers, per-client batch 25 -> total 100, each gets 25
-        let coordinator = create_test_coordinator(4, 25, 10);
+        // 4 trainers, global batch size 100 -> each gets 25
+        let coordinator = create_test_coordinator(4, 100, 10);
 
         let assignments = assign_data_for_state(
             &coordinator,
@@ -186,8 +186,8 @@ mod tests {
 
     #[test]
     fn test_uneven_distribution_with_remainder() {
-        // 23 trainers, per-client batch 17 -> total 391
-        let coordinator = create_test_coordinator(23, 17, 10);
+        // 24 trainers, global batch size 384
+        let coordinator = create_test_coordinator(23, 384, 10);
 
         let assignments = assign_data_for_state(
             &coordinator,
@@ -201,17 +201,19 @@ mod tests {
             .collect();
         sizes.sort();
 
-        // 391 / 23 = 17 exactly
-        assert_eq!(sizes, vec![17; 23]);
+        let mut expected = [16; 7].to_vec();
+        expected.extend([17; 16]);
+        assert_eq!(sizes, expected);
 
         let total: u64 = sizes.iter().sum();
-        assert_eq!(total, 391);
+        assert_eq!(total, 384);
     }
 
     #[test]
     fn test_larger_remainder() {
-        // 5 trainers, per-client batch 3 -> total 15
-        let coordinator = create_test_coordinator(5, 3, 10);
+        // 5 trainers, global batch size 13 -> remainder of 3
+        // Expected: base_size=2, so 3 nodes get 3, 2 nodes get 2
+        let coordinator = create_test_coordinator(5, 13, 10);
 
         let assignments = assign_data_for_state(
             &coordinator,
@@ -225,9 +227,11 @@ mod tests {
             .collect();
         sizes.sort();
 
-        assert_eq!(sizes, vec![3, 3, 3, 3, 3]);
+        // Base: 13/5 = 2, remainder: 13%5 = 3
+        // First 3 nodes get 3, last 2 get 2
+        assert_eq!(sizes, vec![2, 2, 3, 3, 3]);
 
         let total: u64 = sizes.iter().sum();
-        assert_eq!(total, 15);
+        assert_eq!(total, 13);
     }
 }

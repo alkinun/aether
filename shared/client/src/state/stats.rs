@@ -56,8 +56,9 @@ impl StatsLogger {
 
     pub fn publish_round_stats(&self, state: &Coordinator) {
         let mut round_log = LogData::new();
+        let total_tokens_val = total_tokens(state);
 
-        round_log.insert("_step", state.progress.step);
+        round_log.insert("_step", total_tokens_val);
 
         // Training metrics
         if let Some(loss) = self.losses().last() {
@@ -79,13 +80,12 @@ impl StatsLogger {
 
         let lr = Trainer::get_lr(
             &self.lr_schedule,
-            state.effective_lr_step(),
+            state.progress.step,
             state.get_cold_start_warmup_bounds(),
         );
         round_log.insert("train/lr", lr);
         self.metrics.record_learning_rate(lr);
 
-        let total_tokens_val = total_tokens(state);
         let tokens_per_sec_val = self.global_tokens_per_second(state);
         let token_batch_size_val = token_batch_size(state);
         let efficiency_val = self.efficency();
